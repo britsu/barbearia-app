@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agendamento Barbearia</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Barbearia – Agendamento Online</h1>
+  </header>
+
+  <main>
+    <!-- Seção de Serviços Disponíveis -->
+    <section id="secServicos">
+      <h2>Serviços Disponíveis</h2>
+      <div id="listaServicosContainer"></div>
+    </section>
+
+    <hr>
+
+    <!-- Seção de Pré-Cadastro -->
+    <section id="secPreCadastro">
+      <h2>Pré-Cadastro de Interesse</h2>
+      <form id="formPre">
+        <label for="nomePre">Nome completo:</label><br>
+        <input type="text" id="nomePre" required><br><br>
+
+        <label for="telPre">Telefone (WhatsApp):</label><br>
+        <input type="tel" id="telPre" placeholder="63991234567" required><br><br>
+
+        <label for="emailPre">E-mail (opcional):</label><br>
+        <input type="email" id="emailPre" placeholder="seu@email.com"><br><br>
+
+        <label for="selectServPre">Serviço de interesse:</label><br>
+        <select id="selectServPre"></select><br><br>
+
+        <button type="submit" id="btnEnviarPre">Enviar Pré-Cadastro</button>
+      </form>
+      <div id="msgPre"></div>
+    </section>
+
+    <hr>
+
+    <!-- Seção de Agendamento em Tempo Real -->
+    <section id="secAgendamento">
+      <h2>Agendar Serviço</h2>
+
+      <!-- Passo 1: Escolha do serviço -->
+      <label for="selectServicoAg">Selecione um serviço:</label><br>
+      <select id="selectServicoAg"></select><br><br>
+
+      <!-- Passo 2: Escolha da data -->
+      <label for="selectDataAg">Selecione a data:</label><br>
+      <input type="date" id="selectDataAg"><br><br>
+
+      <!-- Passo 3: Profissionais disponíveis para o serviço -->
+      <label for="selectProfAg">Selecione o profissional:</label><br>
+      <select id="selectProfAg"></select><br><br>
+
+      <!-- Passo 4: Botões de horário disponíveis -->
+      <div id="horariosDisponiveisContainer"></div><br>
+
+      <!-- Passo 5: Dados do cliente -->
+      <label for="nomeClienteAg">Nome completo:</label><br>
+      <input type="text" id="nomeClienteAg"><br><br>
+
+      <label for="telClienteAg">Telefone (WhatsApp):</label><br>
+      <input type="tel" id="telClienteAg" placeholder="63991234567"><br><br>
+
+      <button id="btnEnviarAg" disabled>Confirmar Agendamento</button>
+      <div id="msgAg"></div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+/* style.css */
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  background-color: #161616;
+  color: #ffffff;
+}
+
+header, h1, h2 {
+  text-align: center;
+}
+
+main {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+section {
+  margin-bottom: 32px;
+}
+
+label {
+  font-weight: bold;
+}
+
+input, select, button {
+  background-color: #222222;
+  color: #ffffff;
+  border: 1px solid #555555;
+  border-radius: 4px;
+  padding: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+button {
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+#listaServicosContainer > div {
+  border: 1px solid #ffffff;
+  padding: 12px;
+  margin-bottom: 8px;
+  background-color: #222222;
+}
+
+#horariosDisponiveisContainer > button {
+  margin: 4px;
+  padding: 8px 12px;
+  border: 1px solid #ffffff;
+  background: none;
+  color: #ffffff;
+  border-radius: 4px;
+}
+
+#horariosDisponiveisContainer > button.selecionado {
+  background-color: #444444;
+}
+
+@media (max-width: 480px) {
+  main {
+    padding: 8px;
+  }
+  #horariosDisponiveisContainer > button {
+    font-size: 14px;
+    margin: 2px;
+    padding: 6px 8px;
+  }
+  input, select, button {
+    padding: 6px;
+  }
+}
