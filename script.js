@@ -1,270 +1,339 @@
-// script.js (FRONTEND)
+// ----------------------------------------
+// 3.1) Constantes e variáveis globais
+// ----------------------------------------
 
-// Substitua abaixo pela URL exata do seu Web App (Apps Script)
-const API_BASE = 'https://script.google.com/macros/s/AKfycbwABCDE12345/exec';
+// Substitua pela URL exata do seu Web App (Apps Script), termina em /exec
+const API_BASE = 'https://script.google.com/macros/s/AKfycbyrl5aCc7Xfw_GrzOYMmkGtnXtlMBhOtQuCFHDoMSZqKhMXAoR9YpdhN0hiWgRA4Fxo/exec';
+
+let listaServicos = [];
+let listaProfissionais = [];
+let listaTurnos       = [];
+
+// Estado atual do agendamento:
+let estado = {
+  servicoSelecionado: null,   // objeto { id_servico, nome_servico, preco, duracao_min }
+  dataSelecionada:    null,   // string no formato "YYYY-MM-DD"
+  profissionalID:     null,   // id_profissional (string)
+  profissionalNome:   null,   // nome_profissional (string)
+  horarioSelecionado: null    // string "HH:MM"
+};
+
+// ----------------------------------------
+// 3.2) Ao carregar DOMContentLoaded → inicializar
+// ----------------------------------------
 
 document.addEventListener('DOMContentLoaded', () => {
-  carregarServicosEProfissionais();
-  configurarFormPreCadastro();
-  configurarAgendamentoListener();
+  carregarServicos();
 });
 
-let listaServicosGlob = [];
-let listaProfissionaisGlob = [];
+// ----------------------------------------
+// 3.3) Função: carregarServicos
+//    → faz GET ?action=servicos, preenche #listaServicosContainer
+// ----------------------------------------
 
-function carregarServicosEProfissionais() {
-  fetch(`${API_BASE}?action=servicos`)
-    .then(res => res.json())
-    .then(servicos => {
-      if (servicos.error) {
-        console.error('Erro ao carregar serviços:', servicos.error);
-        return;
-      }
-      listaServicosGlob = servicos;
-      popularListaServicos(servicos);
-      popularSelectPre(servicos);
-      popularSelectServicoAg(servicos);
-    })
-    .catch(err => console.error('Erro na requisição de serviços:', err));
+async function carregarServicos() {
+  try {
+    const response = await fetch(`${API_BASE}?action=servicos`);
+    const dados = await response.json();
 
-  fetch(`${API_BASE}?action=profissionais`)
-    .then(res => res.json())
-    .then(profissionais => {
-      if (profissionais.error) {
-        console.error('Erro ao carregar profissionais:', profissionais.error);
-        return;
-      }
-      listaProfissionaisGlob = profissionais;
-    })
-    .catch(err => console.error('Erro na requisição de profissionais:', err));
+    if (dados.error) {
+      console.error('Erro ao buscar serviços:', dados.error);
+      return;
+    }
+
+    listaServicos = dados; // array de objetos { id_servico, nome_servico, preco, duracao_min }
+
+    montarCardsServicos();
+  } catch (err) {
+    console.error('Erro ao buscar serviços:', err);
+  }
 }
 
-function popularListaServicos(servicos) {
-  const divContainer = document.getElementById('listaServicosContainer');
-  divContainer.innerHTML = '';
-  servicos.forEach(s => {
-    const bloco = document.createElement('div');
-    bloco.innerHTML = `<strong>${s.nome_servico}</strong><br>${s.preco} – ${s.duracao_min}min`;
-    divContainer.appendChild(bloco);
+function montarCardsServicos() {
+  const container = document.getElementById('listaServicosContainer');
+  container.innerHTML = ''; // limpa antes
+
+  listaServicos.forEach(serv => {
+    const card = document.createElement('div');
+    card.classList.add('card-servico');
+    card.dataset.id = serv.id_servico;
+
+    // Estrutura interna do card
+    card.innerHTML = `
+      <h3>${serv.nome_servico.toUpperCase()}</h3>
+      <p>${serv.duracao_min} min</p>
+    `;
+
+    // Ao clicar no card → iniciar fluxo de agendamento
+    card.addEventListener('click', () => {
+      iniciarFluxoAgendamento(serv);
+    });
+
+    container.appendChild(card);
   });
 }
 
-function popularSelectPre(servicos) {
-  const select = document.getElementById('selectServPre');
-  select.innerHTML = '';
-  servicos.forEach(s => {
+// ----------------------------------------
+// 3.4) Função: iniciarFluxoAgendamento(servico)
+// ----------------------------------------
+
+function iniciarFluxoAgendamento(servico) {
+  // 1) gravar estado de serviço selecionado
+  estado.servicoSelecionado = servico;
+
+  // 2) esconder seção de serviços e mostrar seção de agendamento
+  document.getElementById('secServicos').classList.add('hidden');
+  document.getElementById('secAgendamento').classList.remove('hidden');
+
+  // 3) atualizar o texto do serviço selecionado
+  document.getElementById('textoServicoEscolhido').innerText = servico.nome_servico;
+
+  // 4) definir data mínima (hoje) no input[type=date]
+  const inputDate = document.getElementById('inputData');
+  const hoje = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+  inputDate.setAttribute('min', hoje);
+
+  // 5) adicionar listener para quando a data for escolhida
+  inputDate.addEventListener('change', onDataSelecionada);
+
+  // 6) fazer scroll automático até “Escolher Data”
+  document.getElementById('passoEscolherData').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ----------------------------------------
+// 3.5) Função: onDataSelecionada()
+//    → quando o usuário escolhe data
+// ----------------------------------------
+
+async function onDataSelecionada(e) {
+  const data = e.target.value; // ex: "2025-06-10"
+  if (!data) return;
+
+  estado.dataSelecionada = data;
+
+  // Exibir o passo de escolher profissional
+  document.getElementById('passoEscolherProfissional').classList.remove('hidden');
+
+  // Limpar dropdown anterior e adicionar opção default
+  const selectProf = document.getElementById('selectProfissional');
+  selectProf.innerHTML = '<option value="">-- Selecione um profissional --</option>';
+
+  // Buscar lista de profissionais (já carregada previamente? se não, faz GET)
+  if (listaProfissionais.length === 0) {
+    await carregarProfissionais();
+  }
+
+  // Filtrar profissionais que atendem ao serviço selecionado
+  const idServ = estado.servicoSelecionado.id_servico;
+  const profsFiltrados = listaProfissionais.filter(p =>
+    p.servicos_disponiveis.includes(idServ)
+  );
+
+  // Preencher opções no select
+  profsFiltrados.forEach(p => {
     const opt = document.createElement('option');
-    opt.value = s.id_servico;
-    opt.textContent = s.nome_servico;
-    select.appendChild(opt);
+    opt.value = p.id_profissional;
+    opt.text = p.nome_profissional;
+    selectProf.appendChild(opt);
   });
+
+  // Adicionar listener para mudança de profissional
+  selectProf.addEventListener('change', onProfissionalSelecionado);
+
+  // Scroll até dropdown de profissionais
+  document.getElementById('passoEscolherProfissional').scrollIntoView({ behavior: 'smooth' });
 }
 
-function popularSelectServicoAg(servicos) {
-  const select = document.getElementById('selectServicoAg');
-  select.innerHTML = '<option value="">-- Selecione um serviço --</option>';
-  servicos.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id_servico;
-    opt.textContent = s.nome_servico;
-    select.appendChild(opt);
-  });
-}
+// ----------------------------------------
+// 3.6) Função: carregarProfissionais()
+//    → faz GET ?action=profissionais
+// ----------------------------------------
 
-function configurarFormPreCadastro() {
-  const form = document.getElementById('formPre');
-  const msgPre = document.getElementById('msgPre');
+async function carregarProfissionais() {
+  try {
+    const response = await fetch(`${API_BASE}?action=profissionais`);
+    const dados = await response.json();
 
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const nome = document.getElementById('nomePre').value.trim();
-    const tel  = document.getElementById('telPre').value.trim();
-    const email= document.getElementById('emailPre').value.trim();
-    const idServ= document.getElementById('selectServPre').value;
-
-    if (!nome || !tel || !idServ) {
-      msgPre.textContent = 'Preencha nome, telefone e escolha um serviço.';
+    if (dados.error) {
+      console.error('Erro ao buscar profissionais:', dados.error);
       return;
     }
-    msgPre.textContent = 'Enviando...';
 
-    fetch(API_BASE, {
+    // dados é array de { id_profissional, nome_profissional, servicos_disponiveis: [ ... ] }
+    listaProfissionais = dados;
+  } catch (err) {
+    console.error('Erro ao buscar profissionais:', err);
+  }
+}
+
+// ----------------------------------------
+// 3.7) Função: onProfissionalSelecionado()
+// ----------------------------------------
+
+async function onProfissionalSelecionado(e) {
+  const idProf = e.target.value;
+  if (!idProf) return;
+
+  // Capturar nome do profissional selecionado
+  const profObj = listaProfissionais.find(p => p.id_profissional === idProf);
+  estado.profissionalID   = idProf;
+  estado.profissionalNome = profObj.nome_profissional;
+
+  // Exibir o passo de escolher horário
+  document.getElementById('passoEscolherHorario').classList.remove('hidden');
+
+  // Limpar botões de horário anteriores
+  const containerHorarios = document.getElementById('botoesHorariosContainer');
+  containerHorarios.innerHTML = '';
+
+  // Buscar horários disponíveis via GET ?action=turnos&data=YYYY-MM-DD&idServico=ID
+  await carregarTurnosDisponiveis(estado.dataSelecionada, estado.servicoSelecionado.id_servico);
+
+  // Filtrar apenas os turnos em que id_profissional === “estado.profissionalID”
+  const turnosParaProf = listaTurnos.filter(t => t.id_profissional === idProf);
+
+  // Montar botões de horário
+  turnosParaProf.forEach(t => {
+    const btn = document.createElement('button');
+    btn.classList.add('btn-horario');
+    btn.innerText = t.hora;     // ex: "11:00"
+    btn.dataset.idTurno = t.id_turno;
+
+    btn.addEventListener('click', () => {
+      onHorarioSelecionado(t.hora, t.id_turno, btn);
+    });
+
+    containerHorarios.appendChild(btn);
+  });
+
+  // Scroll até botões de horário
+  document.getElementById('passoEscolherHorario').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ----------------------------------------
+// 3.8) Função: carregarTurnosDisponiveis(data, idServico)
+//    → faz GET ?action=turnos&data=YYYY-MM-DD&idServico=ID
+// ----------------------------------------
+
+async function carregarTurnosDisponiveis(dataEscolhida, idServico) {
+  try {
+    const response = await fetch(`${API_BASE}?action=turnos&data=${dataEscolhida}&idServico=${idServico}`);
+    const dados = await response.json();
+
+    if (dados.error) {
+      console.error('Erro ao buscar turnos:', dados.error);
+      return;
+    }
+
+    // Retorna array de objetos { id_turno, data, hora, id_profissional }
+    listaTurnos = dados;
+  } catch (err) {
+    console.error('Erro ao buscar turnos:', err);
+  }
+}
+
+// ----------------------------------------
+// 3.9) Função: onHorarioSelecionado(horario, idTurno, btn)
+// ----------------------------------------
+
+function onHorarioSelecionado(horario, idTurno, btn) {
+  // 1) Renderizar estado atual
+  estado.horarioSelecionado = horario;
+  estado.idTurnoSelecionado = idTurno; // para usar no payload de agendamento
+
+  // 2) Marcar o botão como “ativo” e remover active de outros
+  document.querySelectorAll('.btn-horario').forEach(b => {
+    b.classList.remove('active');
+  });
+  btn.classList.add('active');
+
+  // 3) Exibir o passo de Resumo
+  document.getElementById('passoResumo').classList.remove('hidden');
+
+  // Preencher os spans com dados salvos em estado
+  document.getElementById('resumoServico').innerText = estado.servicoSelecionado.nome_servico;
+  document.getElementById('resumoData').innerText   = estado.dataSelecionada.split('-').reverse().join('/'); // “DD/MM/YYYY”
+  document.getElementById('resumoProfissional').innerText = estado.profissionalNome;
+  document.getElementById('resumoHorario').innerText = estado.horarioSelecionado;
+
+  // 4) Exibir o passo de Dados do Cliente
+  document.getElementById('passoDadosCliente').classList.remove('hidden');
+
+  // 5) ...
+  document.getElementById('passoResumo').scrollIntoView({ behavior: 'smooth' });
+
+  // 6) Habilitar botão AGENDAR apenas quando campos nome+telefone estiverem preenchidos
+  const inputNome = document.getElementById('nomeCliente');
+  const inputTel  = document.getElementById('telefoneCliente');
+  const btnAgendar = document.getElementById('btnConfirmarAgendamento');
+
+  // Limpar campos de nome e telefone
+  inputNome.value = '';
+  inputTel.value  = '';
+  btnAgendar.disabled = true;
+
+  // Adicionar event listeners para verificar se ambos estão preenchidos
+  inputNome.addEventListener('input', () => {
+    btnAgendar.disabled = !(inputNome.value.trim() && inputTel.value.trim());
+  });
+  inputTel.addEventListener('input', () => {
+    btnAgendar.disabled = !(inputNome.value.trim() && inputTel.value.trim());
+  });
+
+  // Adicionar listener para o clique em “AGENDAR”
+  btnAgendar.addEventListener('click', onConfirmarAgendamento);
+}
+
+// ----------------------------------------
+// 3.10) Função: onConfirmarAgendamento()
+//    → faz POST para backend (action: "agendamento")
+// ----------------------------------------
+
+async function onConfirmarAgendamento() {
+  const nome  = document.getElementById('nomeCliente').value.trim();
+  const tel   = document.getElementById('telefoneCliente').value.trim();
+  const idTurno = estado.idTurnoSelecionado;
+  const idServ  = estado.servicoSelecionado.id_servico;
+
+  // Montar payload conforme formato do Apps Script
+  const payload = {
+    action: 'agendamento',
+    payload: {
+      id_turno: idTurno,
+      id_servico: idServ,
+      nome_cliente: nome,
+      telefone_cliente: tel
+    }
+  };
+
+  try {
+    const response = await fetch(API_BASE, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'precadastro',
-        payload: {
-          nome_cliente: nome,
-          telefone_cliente: tel,
-          email_cliente: email,
-          id_servico_interesse: idServ
-        }
-      })
-    })
-    .then(res => res.json())
-    .then(json => {
-      if (json.success) {
-        msgPre.textContent = 'Pré-cadastro enviado com sucesso!';
-        form.reset();
-      } else {
-        msgPre.textContent = 'Erro: ' + (json.error || 'falha desconhecida.');
-      }
-    })
-    .catch(err => {
-      console.error('Erro no fetch de pré-cadastro:', err);
-      msgPre.textContent = 'Erro ao enviar pré-cadastro.';
-    });
-  });
-}
-
-function configurarAgendamentoListener() {
-  const selectServicoAg = document.getElementById('selectServicoAg');
-  const selectDataAg    = document.getElementById('selectDataAg');
-  const selectProfAg    = document.getElementById('selectProfAg');
-  const containerHoras  = document.getElementById('horariosDisponiveisContainer');
-  const btnConfirmar    = document.getElementById('btnEnviarAg');
-  const msgAg           = document.getElementById('msgAg');
-
-  let turnoSelecionado = null;
-
-  selectServicoAg.addEventListener('change', () => {
-    limparAgendamento();
-    carregarProfissionaisDisponiveis();
-  });
-  selectDataAg.addEventListener('change', () => {
-    limparAgendamento();
-    carregarProfissionaisDisponiveis();
-  });
-
-  function limparAgendamento() {
-    selectProfAg.innerHTML = '';
-    containerHoras.innerHTML = '';
-    btnConfirmar.disabled = true;
-    turnoSelecionado = null;
-    msgAg.textContent = '';
-  }
-
-  function carregarProfissionaisDisponiveis() {
-    const idServ = selectServicoAg.value;
-    if (!idServ) return;
-
-    const profsQueAtendem = listaProfissionaisGlob.filter(p => {
-      return p.servicos_disponiveis.includes(idServ);
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
     });
 
-    selectProfAg.innerHTML = '<option value="">-- Selecione um profissional --</option>';
-    profsQueAtendem.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id_profissional;
-      opt.textContent = p.nome_profissional;
-      selectProfAg.appendChild(opt);
-    });
+    const dados = await response.json();
+    if (dados.error) {
+      document.getElementById('msgAgendamento').innerText = `Erro: ${dados.error}`;
+      document.getElementById('msgAgendamento').classList.remove('sucesso');
+    } else {
+      // Sucesso: abrir link WhatsApp, exibir mensagem de sucesso e opcionalmente resetar tudo
+      window.open(dados.link_whatsapp, '_blank');
 
-    if (selectDataAg.value) {
-      carregarHorariosDisponiveis();
+      document.getElementById('msgAgendamento').innerText = 'Agendamento enviado! Abrindo WhatsApp...';
+      document.getElementById('msgAgendamento').classList.add('sucesso');
+
+      // Se quiser, após 3s redireciona de volta à tela inicial:
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
     }
+  } catch (err) {
+    console.error('Erro no POST agendamento:', err);
+    document.getElementById('msgAgendamento').innerText = 'Erro ao enviar agendamento.';
+    document.getElementById('msgAgendamento').classList.remove('sucesso');
   }
-
-  selectProfAg.addEventListener('change', carregarHorariosDisponiveis);
-
-  function carregarHorariosDisponiveis() {
-    const idServ = selectServicoAg.value;
-    const dataEscolhida = selectDataAg.value;
-    const idProf = selectProfAg.value;
-
-    if (!idServ || !dataEscolhida || !idProf) {
-      containerHoras.innerHTML = '';
-      return;
-    }
-
-    fetch(`${API_BASE}?action=turnos&data=${encodeURIComponent(dataEscolhida)}&idServico=${encodeURIComponent(idServ)}`)
-      .then(res => res.json())
-      .then(turnos => {
-        if (turnos.error) {
-          console.error('Erro ao carregar turnos:', turnos.error);
-          containerHoras.textContent = 'Erro ao carregar horários.';
-          return;
-        }
-        const turnosFiltrados = turnos.filter(t => t.id_profissional === idProf);
-        exibirBotoesHorarios(turnosFiltrados);
-      })
-      .catch(err => {
-        console.error('Falha no fetch de turnos:', err);
-        containerHoras.textContent = 'Erro ao carregar horários.';
-      });
-  }
-
-  function exibirBotoesHorarios(turnos) {
-    containerHoras.innerHTML = '';
-    turnoSelecionado = null;
-    btnConfirmar.disabled = true;
-    msgAg.textContent = '';
-
-    if (turnos.length === 0) {
-      containerHoras.textContent = 'Nenhum horário disponível para esse profissional neste dia.';
-      return;
-    }
-
-    turnos.forEach(t => {
-      const btnHr = document.createElement('button');
-      btnHr.textContent = t.hora;
-      btnHr.dataset.idTurno = t.id_turno;
-      btnHr.classList.add('hora-btn');
-      btnHr.addEventListener('click', () => {
-        document.querySelectorAll('#horariosDisponiveisContainer button').forEach(b => {
-          b.classList.remove('selecionado');
-        });
-        btnHr.classList.add('selecionado');
-        turnoSelecionado = t.id_turno;
-        btnConfirmar.disabled = false;
-      });
-      containerHoras.appendChild(btnHr);
-    });
-  }
-
-  btnConfirmar.addEventListener('click', () => {
-    const nomeC = document.getElementById('nomeClienteAg').value.trim();
-    const telC  = document.getElementById('telClienteAg').value.trim();
-    const idServ= selectServicoAg.value;
-
-    if (!turnoSelecionado || !nomeC || !telC || !idServ) {
-      msgAg.textContent = 'Preencha todos os campos e selecione um horário.';
-      return;
-    }
-    msgAg.textContent = 'Enviando agendamento...';
-
-    fetch(API_BASE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'agendamento',
-        payload: {
-          id_turno: turnoSelecionado,
-          id_servico: idServ,
-          nome_cliente: nomeC,
-          telefone_cliente: telC
-        }
-      })
-    })
-    .then(res => res.json())
-    .then(json => {
-      if (json.success) {
-        window.open(json.link_whatsapp, '_blank');
-        msgAg.textContent = 'Clique no link do WhatsApp para confirmar.';
-        selectServicoAg.value = '';
-        selectDataAg.value = '';
-        selectProfAg.innerHTML = '';
-        containerHoras.innerHTML = '';
-        document.getElementById('nomeClienteAg').value = '';
-        document.getElementById('telClienteAg').value = '';
-        btnConfirmar.disabled = true;
-      } else {
-        msgAg.textContent = 'Erro ao agendar: ' + (json.error || 'Erro desconhecido');
-      }
-    })
-    .catch(err => {
-      console.error('Erro no fetch de agendamento:', err);
-      msgAg.textContent = 'Erro ao enviar agendamento.';
-    });
-  });
 }

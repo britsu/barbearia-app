@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agendamento Barbearia</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Barbearia – Agendamento Online</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,66 +12,73 @@
   </header>
 
   <main>
-    <!-- Seção de Serviços Disponíveis -->
+    <!-- 1) Seção de Seleção de Serviço na página inicial -->
     <section id="secServicos">
       <h2>Serviços Disponíveis</h2>
-      <div id="listaServicosContainer"></div>
+      <div id="listaServicosContainer">
+        <!-- Cards ou lista de serviços gerados pelo JS -->
+      </div>
     </section>
 
     <hr>
 
-    <!-- Seção de Pré-Cadastro -->
-    <section id="secPreCadastro">
-      <h2>Pré-Cadastro de Interesse</h2>
-      <form id="formPre">
-        <label for="nomePre">Nome completo:</label><br>
-        <input type="text" id="nomePre" required><br><br>
-
-        <label for="telPre">Telefone (WhatsApp):</label><br>
-        <input type="tel" id="telPre" placeholder="63991234567" required><br><br>
-
-        <label for="emailPre">E-mail (opcional):</label><br>
-        <input type="email" id="emailPre" placeholder="seu@email.com"><br><br>
-
-        <label for="selectServPre">Serviço de interesse:</label><br>
-        <select id="selectServPre"></select><br><br>
-
-        <button type="submit" id="btnEnviarPre">Enviar Pré-Cadastro</button>
-      </form>
-      <div id="msgPre"></div>
-    </section>
-
-    <hr>
-
-    <!-- Seção de Agendamento em Tempo Real -->
-    <section id="secAgendamento">
+    <!-- 2) Seção de Agendamento (inicialmente escondida) -->
+    <section id="secAgendamento" class="hidden">
       <h2>Agendar Serviço</h2>
 
-      <!-- Passo 1: Escolha do serviço -->
-      <label for="selectServicoAg">Selecione um serviço:</label><br>
-      <select id="selectServicoAg"></select><br><br>
+      <!-- Passo 1: Mostrar serviço selecionado (apenas título) -->
+      <div id="passoServicoEscolhido">
+        <p>Serviço selecionado: <span id="textoServicoEscolhido"></span></p>
+      </div>
 
-      <!-- Passo 2: Escolha da data -->
-      <label for="selectDataAg">Selecione a data:</label><br>
-      <input type="date" id="selectDataAg"><br><br>
+      <!-- Passo 2: Escolha da data (calendar popup) -->
+      <div id="passoEscolherData">
+        <label for="inputData">Selecione a data:</label>
+        <input type="date" id="inputData" min="" />
+      </div>
 
-      <!-- Passo 3: Profissionais disponíveis para o serviço -->
-      <label for="selectProfAg">Selecione o profissional:</label><br>
-      <select id="selectProfAg"></select><br><br>
+      <!-- Passo 3: Profissionais disponíveis (dropdown escondido até data estar preenchida) -->
+      <div id="passoEscolherProfissional" class="hidden">
+        <label for="selectProfissional">Selecione o profissional:</label>
+        <select id="selectProfissional">
+          <option value="">-- Selecione um profissional --</option>
+        </select>
+      </div>
 
-      <!-- Passo 4: Botões de horário disponíveis -->
-      <div id="horariosDisponiveisContainer"></div><br>
+      <!-- Passo 4: Horários disponíveis (buttons escondidos até profissional escolhido) -->
+      <div id="passoEscolherHorario" class="hidden">
+        <p>Escolha um horário disponível:</p>
+        <div id="botoesHorariosContainer">
+          <!-- Botões serão criados dinamicamente via JS -->
+        </div>
+      </div>
 
-      <!-- Passo 5: Dados do cliente -->
-      <label for="nomeClienteAg">Nome completo:</label><br>
-      <input type="text" id="nomeClienteAg"><br><br>
+      <!-- Passo 5: Resumo do agendamento (escondido até horário escolhido) -->
+      <div id="passoResumo" class="hidden">
+        <h3>Resumo do Agendamento:</h3>
+        <ul>
+          <li><strong>Serviço:</strong> <span id="resumoServico"></span></li>
+          <li><strong>Data:</strong> <span id="resumoData"></span></li>
+          <li><strong>Profissional:</strong> <span id="resumoProfissional"></span></li>
+          <li><strong>Horário:</strong> <span id="resumoHorario"></span></li>
+        </ul>
+      </div>
 
-      <label for="telClienteAg">Telefone (WhatsApp):</label><br>
-      <input type="tel" id="telClienteAg" placeholder="63991234567"><br><br>
+      <!-- Passo 6: Dados do cliente (nome + telefone + botão Agendar) -->
+      <div id="passoDadosCliente" class="hidden">
+        <label for="nomeCliente">Nome completo:</label>
+        <input type="text" id="nomeCliente" placeholder="Seu nome" />
 
-      <button id="btnEnviarAg" disabled>Confirmar Agendamento</button>
-      <div id="msgAg"></div>
+        <label for="telefoneCliente">Telefone (WhatsApp):</label>
+        <input type="tel" id="telefoneCliente" placeholder="63991234567" />
+
+        <button id="btnConfirmarAgendamento" disabled>AGENDAR</button>
+      </div>
+
+      <!-- Mensagem de feedback -->
+      <div id="msgAgendamento" class="msg"></div>
     </section>
+
   </main>
 
   <script src="script.js"></script>
