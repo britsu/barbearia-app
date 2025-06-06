@@ -2,9 +2,6 @@
 // 3.1) Constantes e variáveis globais
 // ----------------------------------------
 
-// Substitua pela URL exata do seu Web App (Apps Script), termina em /exec
-const API_BASE = 'https://script.google.com/macros/s/AKfycbyrl5aCc7Xfw_GrzOYMmkGtnXtlMBhOtQuCFHDoMSZqKhMXAoR9YpdhN0hiWgRA4Fxo/exec';
-
 let listaServicos = [];
 let listaProfissionais = [];
 let listaTurnos       = [];
@@ -15,56 +12,56 @@ let estado = {
   dataSelecionada:    null,   // string no formato "YYYY-MM-DD"
   profissionalID:     null,   // id_profissional (string)
   profissionalNome:   null,   // nome_profissional (string)
-  horarioSelecionado: null    // string "HH:MM"
+  horarioSelecionado: null,   // string "HH:MM"
+  idTurnoSelecionado: null    // id_turno (string)
 };
 
 // ----------------------------------------
 // 3.2) Ao carregar DOMContentLoaded → inicializar
 // ----------------------------------------
-
-document.addEventListener('DOMContentLoaded', () => {
-  carregarServicos();
+document.addEventListener('DOMContentLoaded', async () => {
+  await carregarServicos();
+  await carregarProfissionais();
 });
 
 // ----------------------------------------
-// 3.3) Função: carregarServicos
-//    → faz GET ?action=servicos, preenche #listaServicosContainer
+// Função: carregarServicos → busca no Firestore
 // ----------------------------------------
-
 async function carregarServicos() {
   try {
-    const response = await fetch(`${API_BASE}?action=servicos`);
-    const dados = await response.json();
-
-    if (dados.error) {
-      console.error('Erro ao buscar serviços:', dados.error);
-      return;
-    }
-
-    listaServicos = dados; // array de objetos { id_servico, nome_servico, preco, duracao_min }
-
+    const snapshot = await db.collection('servicos').get();
+    listaServicos = snapshot.docs.map(doc => {
+      const dados = doc.data();
+      return {
+        id_servico: doc.id,
+        nome_servico: dados.nome_servico,
+        preco: dados.preco,
+        duracao_min: dados.duracao_min
+      };
+    });
     montarCardsServicos();
   } catch (err) {
-    console.error('Erro ao buscar serviços:', err);
+    console.error('Erro ao buscar serviços no Firestore:', err);
   }
 }
 
+// ----------------------------------------
+// Função: montarCardsServicos
+// ----------------------------------------
 function montarCardsServicos() {
   const container = document.getElementById('listaServicosContainer');
-  container.innerHTML = ''; // limpa antes
+  container.innerHTML = '';
 
   listaServicos.forEach(serv => {
     const card = document.createElement('div');
     card.classList.add('card-servico');
     card.dataset.id = serv.id_servico;
 
-    // Estrutura interna do card
     card.innerHTML = `
       <h3>${serv.nome_servico.toUpperCase()}</h3>
       <p>${serv.duracao_min} min</p>
     `;
 
-    // Ao clicar no card → iniciar fluxo de agendamento
     card.addEventListener('click', () => {
       iniciarFluxoAgendamento(serv);
     });
@@ -74,62 +71,44 @@ function montarCardsServicos() {
 }
 
 // ----------------------------------------
-// 3.4) Função: iniciarFluxoAgendamento(servico)
+// Função: iniciarFluxoAgendamento(servico)
 // ----------------------------------------
-
 function iniciarFluxoAgendamento(servico) {
-  // 1) gravar estado de serviço selecionado
   estado.servicoSelecionado = servico;
 
-  // 2) esconder seção de serviços e mostrar seção de agendamento
   document.getElementById('secServicos').classList.add('hidden');
   document.getElementById('secAgendamento').classList.remove('hidden');
 
-  // 3) atualizar o texto do serviço selecionado
   document.getElementById('textoServicoEscolhido').innerText = servico.nome_servico;
 
-  // 4) definir data mínima (hoje) no input[type=date]
   const inputDate = document.getElementById('inputData');
-  const hoje = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+  const hoje = new Date().toISOString().split('T')[0];
   inputDate.setAttribute('min', hoje);
 
-  // 5) adicionar listener para quando a data for escolhida
   inputDate.addEventListener('change', onDataSelecionada);
-
-  // 6) fazer scroll automático até “Escolher Data”
   document.getElementById('passoEscolherData').scrollIntoView({ behavior: 'smooth' });
 }
 
 // ----------------------------------------
-// 3.5) Função: onDataSelecionada()
-//    → quando o usuário escolhe data
+// Função: onDataSelecionada()
 // ----------------------------------------
-
 async function onDataSelecionada(e) {
-  const data = e.target.value; // ex: "2025-06-10"
+  const data = e.target.value;
   if (!data) return;
 
   estado.dataSelecionada = data;
-
-  // Exibir o passo de escolher profissional
   document.getElementById('passoEscolherProfissional').classList.remove('hidden');
 
-  // Limpar dropdown anterior e adicionar opção default
+  // Limpa dropdown e coloca opção padrão
   const selectProf = document.getElementById('selectProfissional');
   selectProf.innerHTML = '<option value="">-- Selecione um profissional --</option>';
 
-  // Buscar lista de profissionais (já carregada previamente? se não, faz GET)
-  if (listaProfissionais.length === 0) {
-    await carregarProfissionais();
-  }
-
-  // Filtrar profissionais que atendem ao serviço selecionado
+  // Filtra apenas profissionais que atendem ao serviço selecionado
   const idServ = estado.servicoSelecionado.id_servico;
   const profsFiltrados = listaProfissionais.filter(p =>
     p.servicos_disponiveis.includes(idServ)
   );
 
-  // Preencher opções no select
   profsFiltrados.forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.id_profissional;
@@ -137,66 +116,55 @@ async function onDataSelecionada(e) {
     selectProf.appendChild(opt);
   });
 
-  // Adicionar listener para mudança de profissional
   selectProf.addEventListener('change', onProfissionalSelecionado);
-
-  // Scroll até dropdown de profissionais
   document.getElementById('passoEscolherProfissional').scrollIntoView({ behavior: 'smooth' });
 }
 
 // ----------------------------------------
-// 3.6) Função: carregarProfissionais()
-//    → faz GET ?action=profissionais
+// Função: carregarProfissionais → busca no Firestore
 // ----------------------------------------
-
 async function carregarProfissionais() {
   try {
-    const response = await fetch(`${API_BASE}?action=profissionais`);
-    const dados = await response.json();
-
-    if (dados.error) {
-      console.error('Erro ao buscar profissionais:', dados.error);
-      return;
-    }
-
-    // dados é array de { id_profissional, nome_profissional, servicos_disponiveis: [ ... ] }
-    listaProfissionais = dados;
+    const snapshot = await db.collection('profissionais').get();
+    listaProfissionais = snapshot.docs.map(doc => {
+      const dados = doc.data();
+      return {
+        id_profissional: doc.id,
+        nome_profissional: dados.nome_profissional,
+        servicos_disponiveis: dados.servicos_disponiveis // array de IDs
+      };
+    });
   } catch (err) {
-    console.error('Erro ao buscar profissionais:', err);
+    console.error('Erro ao buscar profissionais no Firestore:', err);
   }
 }
 
 // ----------------------------------------
-// 3.7) Função: onProfissionalSelecionado()
+// Função: onProfissionalSelecionado()
 // ----------------------------------------
-
 async function onProfissionalSelecionado(e) {
   const idProf = e.target.value;
   if (!idProf) return;
 
-  // Capturar nome do profissional selecionado
   const profObj = listaProfissionais.find(p => p.id_profissional === idProf);
   estado.profissionalID   = idProf;
   estado.profissionalNome = profObj.nome_profissional;
 
-  // Exibir o passo de escolher horário
   document.getElementById('passoEscolherHorario').classList.remove('hidden');
-
-  // Limpar botões de horário anteriores
   const containerHorarios = document.getElementById('botoesHorariosContainer');
   containerHorarios.innerHTML = '';
 
-  // Buscar horários disponíveis via GET ?action=turnos&data=YYYY-MM-DD&idServico=ID
+  // 1) Carrega turnos disponíveis do Firestore
   await carregarTurnosDisponiveis(estado.dataSelecionada, estado.servicoSelecionado.id_servico);
 
-  // Filtrar apenas os turnos em que id_profissional === “estado.profissionalID”
-  const turnosParaProf = listaTurnos.filter(t => t.id_profissional === idProf);
+  // 2) Filtra turnos apenas para este profissional
+  const turnosParaProf = listaTurnos.filter(t => t.id_profissional === idProf && t.status === 'livre');
 
-  // Montar botões de horário
+  // 3) Monta botões de horário
   turnosParaProf.forEach(t => {
     const btn = document.createElement('button');
     btn.classList.add('btn-horario');
-    btn.innerText = t.hora;     // ex: "11:00"
+    btn.innerText = t.hora;
     btn.dataset.idTurno = t.id_turno;
 
     btn.addEventListener('click', () => {
@@ -206,73 +174,64 @@ async function onProfissionalSelecionado(e) {
     containerHorarios.appendChild(btn);
   });
 
-  // Scroll até botões de horário
   document.getElementById('passoEscolherHorario').scrollIntoView({ behavior: 'smooth' });
 }
 
 // ----------------------------------------
-// 3.8) Função: carregarTurnosDisponiveis(data, idServico)
-//    → faz GET ?action=turnos&data=YYYY-MM-DD&idServico=ID
+// Função: carregarTurnosDisponiveis (busca no Firestore)
 // ----------------------------------------
-
 async function carregarTurnosDisponiveis(dataEscolhida, idServico) {
+  listaTurnos = [];
   try {
-    const response = await fetch(`${API_BASE}?action=turnos&data=${dataEscolhida}&idServico=${idServico}`);
-    const dados = await response.json();
+    // Exemplo: coleção raiz “turnos”
+    const snapshot = await db
+      .collection('turnos')
+      .where('data', '==', dataEscolhida)
+      .get();
 
-    if (dados.error) {
-      console.error('Erro ao buscar turnos:', dados.error);
-      return;
-    }
-
-    // Retorna array de objetos { id_turno, data, hora, id_profissional }
-    listaTurnos = dados;
+    listaTurnos = snapshot.docs.map(doc => {
+      const t = doc.data();
+      return {
+        id_turno: doc.id,
+        data: t.data,
+        hora: t.hora,
+        id_profissional: t.id_profissional,
+        status: t.status,
+        servicoID: t.servicoID // se existir esse campo
+      };
+    });
   } catch (err) {
-    console.error('Erro ao buscar turnos:', err);
+    console.error('Erro ao buscar turnos no Firestore:', err);
   }
 }
 
 // ----------------------------------------
-// 3.9) Função: onHorarioSelecionado(horario, idTurno, btn)
+// Função: onHorarioSelecionado(horario, idTurno, btn)
 // ----------------------------------------
-
 function onHorarioSelecionado(horario, idTurno, btn) {
-  // 1) Renderizar estado atual
   estado.horarioSelecionado = horario;
-  estado.idTurnoSelecionado = idTurno; // para usar no payload de agendamento
+  estado.idTurnoSelecionado = idTurno;
 
-  // 2) Marcar o botão como “ativo” e remover active de outros
-  document.querySelectorAll('.btn-horario').forEach(b => {
-    b.classList.remove('active');
-  });
+  document.querySelectorAll('.btn-horario').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 
-  // 3) Exibir o passo de Resumo
   document.getElementById('passoResumo').classList.remove('hidden');
-
-  // Preencher os spans com dados salvos em estado
-  document.getElementById('resumoServico').innerText = estado.servicoSelecionado.nome_servico;
-  document.getElementById('resumoData').innerText   = estado.dataSelecionada.split('-').reverse().join('/'); // “DD/MM/YYYY”
+  document.getElementById('resumoServico').innerText       = estado.servicoSelecionado.nome_servico;
+  document.getElementById('resumoData').innerText         = estado.dataSelecionada.split('-').reverse().join('/');
   document.getElementById('resumoProfissional').innerText = estado.profissionalNome;
-  document.getElementById('resumoHorario').innerText = estado.horarioSelecionado;
+  document.getElementById('resumoHorario').innerText      = estado.horarioSelecionado;
 
-  // 4) Exibir o passo de Dados do Cliente
   document.getElementById('passoDadosCliente').classList.remove('hidden');
-
-  // 5) ...
   document.getElementById('passoResumo').scrollIntoView({ behavior: 'smooth' });
 
-  // 6) Habilitar botão AGENDAR apenas quando campos nome+telefone estiverem preenchidos
   const inputNome = document.getElementById('nomeCliente');
   const inputTel  = document.getElementById('telefoneCliente');
   const btnAgendar = document.getElementById('btnConfirmarAgendamento');
 
-  // Limpar campos de nome e telefone
   inputNome.value = '';
   inputTel.value  = '';
   btnAgendar.disabled = true;
 
-  // Adicionar event listeners para verificar se ambos estão preenchidos
   inputNome.addEventListener('input', () => {
     btnAgendar.disabled = !(inputNome.value.trim() && inputTel.value.trim());
   });
@@ -280,59 +239,62 @@ function onHorarioSelecionado(horario, idTurno, btn) {
     btnAgendar.disabled = !(inputNome.value.trim() && inputTel.value.trim());
   });
 
-  // Adicionar listener para o clique em “AGENDAR”
   btnAgendar.addEventListener('click', onConfirmarAgendamento);
 }
 
 // ----------------------------------------
-// 3.10) Função: onConfirmarAgendamento()
-//    → faz POST para backend (action: "agendamento")
+// Função: onConfirmarAgendamento() → grava no Firestore
 // ----------------------------------------
-
 async function onConfirmarAgendamento() {
   const nome  = document.getElementById('nomeCliente').value.trim();
   const tel   = document.getElementById('telefoneCliente').value.trim();
   const idTurno = estado.idTurnoSelecionado;
   const idServ  = estado.servicoSelecionado.id_servico;
+  const idProf  = estado.profissionalID;
+  const dataSel = estado.dataSelecionada;
+  const horaSel = estado.horarioSelecionado;
 
-  // Montar payload conforme formato do Apps Script
-  const payload = {
-    action: 'agendamento',
-    payload: {
-      id_turno: idTurno,
-      id_servico: idServ,
-      nome_cliente: nome,
-      telefone_cliente: tel
-    }
-  };
+  if (!nome || !tel) {
+    document.getElementById('msgAgendamento').innerText = 'Por favor, preencha nome e telefone.';
+    return;
+  }
 
   try {
-    const response = await fetch(API_BASE, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
+    // 1) Cria reserva
+    const reservaData = {
+      id_turno: idTurno,
+      id_servico: idServ,
+      id_profissional: idProf,
+      nome_cliente: nome,
+      telefone_cliente: tel,
+      data: dataSel,
+      hora: horaSel,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    const docRefReserva = await db.collection('reservas').add(reservaData);
+
+    // 2) Atualiza turno para “reservado”
+    await db.collection('turnos').doc(idTurno).update({
+      status: 'reservado',
+      reservaID: docRefReserva.id
     });
 
-    const dados = await response.json();
-    if (dados.error) {
-      document.getElementById('msgAgendamento').innerText = `Erro: ${dados.error}`;
-      document.getElementById('msgAgendamento').classList.remove('sucesso');
-    } else {
-      // Sucesso: abrir link WhatsApp, exibir mensagem de sucesso e opcionalmente resetar tudo
-      window.open(dados.link_whatsapp, '_blank');
+    // 3) Abre WhatsApp e mostra mensagem
+    const mensagem = `Olá, ${nome}!
+Seu agendamento para "${estado.servicoSelecionado.nome_servico}" está confirmado em ${dataSel} às ${horaSel} com ${estado.profissionalNome}.`;
+    const urlWhats = `https://wa.me/55${tel}?text=${encodeURIComponent(mensagem)}`;
 
-      document.getElementById('msgAgendamento').innerText = 'Agendamento enviado! Abrindo WhatsApp...';
-      document.getElementById('msgAgendamento').classList.add('sucesso');
+    document.getElementById('msgAgendamento').innerText  = 'Agendamento enviado! Abrindo WhatsApp…';
+    document.getElementById('msgAgendamento').classList.add('sucesso');
+    window.open(urlWhats, '_blank');
 
-      // Se quiser, após 3s redireciona de volta à tela inicial:
-      setTimeout(() => {
-        window.location.reload();
-      }, 3000);
-    }
+    // 4) (Opcional) Recarrega a página após 3 segundos
+    setTimeout(() => {
+      window.location.reload();
+    }, 3000);
+
   } catch (err) {
-    console.error('Erro no POST agendamento:', err);
+    console.error('Erro ao gravar agendamento no Firestore:', err);
     document.getElementById('msgAgendamento').innerText = 'Erro ao enviar agendamento.';
     document.getElementById('msgAgendamento').classList.remove('sucesso');
   }
