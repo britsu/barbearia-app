@@ -55,16 +55,14 @@ const erroTelefoneModal    = document.getElementById("erroTelefoneModal");
 document.addEventListener("DOMContentLoaded", async () => {
   console.log("DOM carregado; iniciando fetch de serviços e profissionais...");
   await carregarServicos();
-  console.log("SERVIÇOS CARREGADOS (console.log abaixo):");
-  console.log(listaServicos);
+  console.log("SERVIÇOS CARREGADOS:", listaServicos);
 
   await carregarProfissionais();
-  console.log("PROFISSIONAIS CARREGADOS:");
-  console.log(listaProfissionais);
+  console.log("PROFISSIONAIS CARREGADOS:", listaProfissionais);
 
   montarTelaPrincipal();
 
-  // Depois que o DOM principal foi montado, garantimos que o botão “X” feche o modal:
+  // Garante que o botão “X” do modal funcione
   btnFecharModal.addEventListener("click", fecharModalAgendamento);
 });
 
@@ -116,7 +114,7 @@ function montarTelaPrincipal() {
     if (sec) sec.scrollIntoView({ behavior: "smooth" });
   });
 
-  // 4.2) Seção de serviços (cria containers fixos)
+  // 4.2) Seção de serviços (containers fixos)
   let servicosHTML = `
     <section id="servicosSection" class="services-section">
       <div class="container">
@@ -133,26 +131,17 @@ function montarTelaPrincipal() {
   `;
   appMain.insertAdjacentHTML("beforeend", servicosHTML);
 
-  // 4.3) Para cada item em listaServicos, infere categoria via id_servico
+  // 4.3) Para cada serviço, inferir categoria a partir do id_servico
   listaServicos.forEach((serv) => {
     const idRaw = (serv.id_servico || "").toString().toLowerCase();
     let cat = "outros";
-    if (idRaw.includes("corte")) {
-      cat = "corte";
-    } else if (idRaw.includes("barba")) {
-      cat = "barba";
-    } else if (idRaw.includes("combo")) {
-      cat = "combos";
-    }
+    if (idRaw.includes("corte")) cat = "corte";
+    else if (idRaw.includes("barba")) cat = "barba";
+    else if (idRaw.includes("combo")) cat = "combos";
 
     const containerId = "cards" + cat.charAt(0).toUpperCase() + cat.slice(1);
     const container = document.getElementById(containerId);
-    if (!container) {
-      console.warn(
-        `Serviço "${serv.id_servico}" não se encaixa em corte/barba/combos (idRaw="${idRaw}"). Ignorando.`
-      );
-      return;
-    }
+    if (!container) return;
 
     const precoNum = Number(serv.preco);
     const precoFmt = isNaN(precoNum) ? "0.00" : precoNum.toFixed(2);
@@ -170,19 +159,21 @@ function montarTelaPrincipal() {
     container.insertAdjacentHTML("beforeend", cardHTML);
   });
 
-  // 4.4) Adiciona listener em cada .card-servico
+  // 4.4) Anexa clique em cada card para abrir o modal
   document.querySelectorAll(".card-servico").forEach((card) => {
     card.addEventListener("click", () => {
       const id = card.dataset.id;
-      servicoSelecionado = listaServicos.find((s) => s.id_servico === id);
-      console.log("→ Clicou no card, servicoSelecionado =", servicoSelecionado);
+      servicoSelecionado = listaServicos.find(
+        (s) => s.id_servico === id
+      );
+      console.log("Serviço selecionado:", servicoSelecionado);
       abrirModalAgendamento();
     });
   });
 }
 
 // =================================================================================
-// 5) ABRIR MODAL DE AGENDAMENTO (DEFINIR PASSO “step-data”)
+// 5) ABRIR MODAL DE AGENDAMENTO (definir passo “step-data”)
 // =================================================================================
 function abrirModalAgendamento() {
   dataSelecionada = null;
@@ -191,18 +182,13 @@ function abrirModalAgendamento() {
   nomeCliente = "";
   telefoneCliente = "";
 
-  console.log("→ abrirModalAgendamento() chamado; serviço:", servicoSelecionado);
+  console.log("Abrir modal; serviço:", servicoSelecionado);
   tituloHeader.innerText = servicoSelecionado.nome_servico;
   btnVoltar.classList.remove("hidden");
   btnVoltar.onclick = () => fecharModalAgendamento();
 
-  console.log("→ mostrarEtapaModal('step-data')");
   mostrarEtapaModal("step-data");
-
-  console.log("→ iniciarCalendarioModal()");
   iniciarCalendarioModal();
-
-  console.log("→ exibindo modal");
   modalAgendamento.classList.remove("hidden");
 }
 
@@ -216,10 +202,9 @@ function fecharModalAgendamento() {
 }
 
 // =================================================================================
-// 7) MOSTRAR APENAS A ETAPA CORRETA (step-data | step-profissional | step-horario | step-dados)
+// 7) MOSTRAR A ETAPA ATUAL DO MODAL
 // =================================================================================
 function mostrarEtapaModal(etapaId) {
-  // Remove .active de todas, adiciona somente ao passo correspondente
   [stepData, stepProfissional, stepHorario, stepDados].forEach((sec) => {
     if (sec.id === etapaId) sec.classList.add("active");
     else sec.classList.remove("active");
@@ -244,7 +229,7 @@ function mostrarEtapaModal(etapaId) {
 }
 
 // =================================================================================
-// 8) CALENDÁRIO NO MODAL (PASSO “step-data”)
+// 8) CALENDÁRIO NO MODAL (step-data)
 // =================================================================================
 let mesAtualModal = new Date().getMonth();
 let anoAtualModal = new Date().getFullYear();
@@ -277,14 +262,14 @@ function renderizarCalendarioModal() {
   const totalDias = new Date(anoAtualModal, mesAtualModal + 1, 0).getDate();
   const hoje = new Date();
 
-  // 8.1) Preencher “espaços vazios”
+  // Espaços vazios antes do dia 1
   for (let i = 0; i < primeiroDia; i++) {
     const vazio = document.createElement("div");
     vazio.classList.add("dia-calendario", "disabled");
     gridDiasModal.appendChild(vazio);
   }
 
-  // 8.2) Preencher cada dia do mês
+  // Dias do mês
   for (let dia = 1; dia <= totalDias; dia++) {
     const cel = document.createElement("div");
     const dtCompare = new Date(anoAtualModal, mesAtualModal, dia);
@@ -307,9 +292,8 @@ function renderizarCalendarioModal() {
         const dd = String(dia).padStart(2, "0");
         const mm = String(mesAtualModal + 1).padStart(2, "0");
         dataSelecionada = `${anoAtualModal}-${mm}-${dd}`;
-        console.log("→ Data selecionada:", dataSelecionada);
+        console.log("Data selecionada:", dataSelecionada);
 
-        // Habilita “Próximo”
         btnAvancarModal.classList.remove("disabled");
         btnAvancarModal.disabled = false;
       });
@@ -337,18 +321,16 @@ function obterMesAnoModal() {
 }
 
 // =================================================================================
-// 9) PASSO “step-profissional”: LISTAR PROFISSIONAIS QUE FAZEM O SERVIÇO
+// 9) LISTAR PROFISSIONAIS (step-profissional)
 // =================================================================================
 function carregarProfissionaisModal() {
-  console.log("→ carregarProfissionaisModal() para o serviço:", servicoSelecionado.id_servico);
-  console.log("   listaProfissionais completa:", listaProfissionais);
-
+  console.log("carregarProfissionaisModal para serviço:", servicoSelecionado.id_servico);
   listaProfissionaisModal.innerHTML = "";
+
   const profsFiltrados = listaProfissionais.filter((p) =>
     Array.isArray(p.servicos_disponiveis) &&
     p.servicos_disponiveis.includes(servicoSelecionado.id_servico)
   );
-  console.log("   profsFiltrados:", profsFiltrados);
 
   if (profsFiltrados.length === 0) {
     listaProfissionaisModal.innerHTML = `
@@ -366,9 +348,8 @@ function carregarProfissionaisModal() {
     item.dataset.id = p.id_profissional;
 
     item.innerHTML = `
-      <img class="avatar" src="${
-        p.foto_url || "https://via.placeholder.com/48"
-      }" alt="${p.nome_profissional}" />
+      <img class="avatar" src="${p.foto_url || "https://via.placeholder.com/48"}" 
+           alt="${p.nome_profissional}" />
       <div class="info-prof">
         <h4>${p.nome_profissional}</h4>
         <p>Especialista em …</p>
@@ -381,7 +362,7 @@ function carregarProfissionaisModal() {
         .forEach((el) => el.classList.remove("selected"));
       item.classList.add("selected");
       profissionalSelecionado = p;
-      console.log("→ Profissional selecionado:", profissionalSelecionado);
+      console.log("Profissional selecionado:", profissionalSelecionado);
 
       btnAvancarModal.classList.remove("disabled");
       btnAvancarModal.disabled = false;
@@ -392,28 +373,33 @@ function carregarProfissionaisModal() {
 }
 
 // =================================================================================
-// 10) PASSO “step-horario”: BUSCAR TURNOS E FILTRAR POR PROFISSIONAL
+// 10) BUSCAR TURNOS (step-horario)
 // =================================================================================
 async function carregarHorariosModal() {
   listaHorariosModal.innerHTML = "";
 
-  console.log("→ carregarHorariosModal() · dataSelecionada =", dataSelecionada);
-  console.log("→ carregarHorariosModal() · id_profissional =", profissionalSelecionado ? profissionalSelecionado.id_profissional : null);
+  console.log("carregarHorariosModal · dataSelecionada =", dataSelecionada);
+  console.log("carregarHorariosModal · idServico =", servicoSelecionado.id_servico);
+  console.log("carregarHorariosModal · id_profissional =", profissionalSelecionado.id_profissional);
 
   try {
-    const resp = await fetch(`${API_BASE}/getTurnos?data=${dataSelecionada}`);
+    // Passa tanto “data” quanto “idServico” na query string
+    const resp = await fetch(
+      `${API_BASE}/getTurnos?data=${dataSelecionada}&idServico=${servicoSelecionado.id_servico}`
+    );
     if (!resp.ok) throw new Error("Erro ao buscar turnos");
 
     const todosTurnos = await resp.json();
-    console.log("→ getTurnos retornou:", todosTurnos);
+    console.log("getTurnos retornou:", todosTurnos);
 
-    // Vamos comparar em minúsculo para evitar mismatch de caixa
+    // Filtra localmente por id_profissional (poderia não ser necessário, 
+    // pois a função já faz isso, mas mantemos aqui só por segurança)
     listaTurnos = todosTurnos.filter(
       (t) =>
         t.id_profissional.toString().toLowerCase() ===
         profissionalSelecionado.id_profissional.toString().toLowerCase()
     );
-    console.log("→ listaTurnos filtrada:", listaTurnos);
+    console.log("listaTurnos filtrada:", listaTurnos);
 
     if (listaTurnos.length === 0) {
       listaHorariosModal.innerHTML = `
@@ -425,7 +411,7 @@ async function carregarHorariosModal() {
       return;
     }
 
-    // Se houver horários, cria botões clicáveis para cada um
+    // Se houver horários, cria botões para cada um
     listaTurnos.forEach((t) => {
       const btn = document.createElement("button");
       btn.classList.add("btn-horario", "available");
@@ -438,7 +424,7 @@ async function carregarHorariosModal() {
           .forEach((b) => b.classList.remove("selected"));
         btn.classList.add("selected");
         turnoSelecionado = t;
-        console.log("→ Horário selecionado:", turnoSelecionado);
+        console.log("Horário selecionado:", turnoSelecionado);
 
         btnAvancarModal.classList.remove("disabled");
         btnAvancarModal.disabled = false;
@@ -458,12 +444,11 @@ async function carregarHorariosModal() {
 }
 
 // =================================================================================
-// 11) BOTÕES “Próximo” e “Voltar” DENTRO DO MODAL
+// 11) NAVEGAÇÃO “Próximo” e “Voltar” dentro do modal
 // =================================================================================
 btnAvancarModal.addEventListener("click", () => {
-  // Se estiver em “step-data”
   if (stepData.classList.contains("active")) {
-    console.log("→ Avançando de step-data para step-profissional");
+    console.log("Avança: step-data → step-profissional");
     mostrarEtapaModal("step-profissional");
     carregarProfissionaisModal();
     btnAvancarModal.classList.add("disabled");
@@ -471,9 +456,8 @@ btnAvancarModal.addEventListener("click", () => {
     return;
   }
 
-  // Se estiver em “step-profissional”
   if (stepProfissional.classList.contains("active")) {
-    console.log("→ Avançando de step-profissional para step-horario");
+    console.log("Avança: step-profissional → step-horario");
     mostrarEtapaModal("step-horario");
     carregarHorariosModal();
     btnAvancarModal.classList.add("disabled");
@@ -481,18 +465,16 @@ btnAvancarModal.addEventListener("click", () => {
     return;
   }
 
-  // Se estiver em “step-horario”
   if (stepHorario.classList.contains("active")) {
-    console.log("→ Avançando de step-horario para step-dados");
+    console.log("Avança: step-horario → step-dados");
     mostrarEtapaModal("step-dados");
     btnAvancarModal.classList.add("disabled");
     btnAvancarModal.disabled = true;
     return;
   }
 
-  // Se estiver em “step-dados” → enviar agendamento
   if (stepDados.classList.contains("active")) {
-    console.log("→ Enviando agendamento...");
+    console.log("Envia agendamento");
     enviarAgendamentoModal();
     return;
   }
@@ -500,24 +482,24 @@ btnAvancarModal.addEventListener("click", () => {
 
 btnVoltarModal.addEventListener("click", () => {
   if (stepProfissional.classList.contains("active")) {
-    console.log("← Voltando de step-profissional para step-data");
+    console.log("Volta: step-profissional → step-data");
     mostrarEtapaModal("step-data");
     return;
   }
   if (stepHorario.classList.contains("active")) {
-    console.log("← Voltando de step-horario para step-profissional");
+    console.log("Volta: step-horario → step-profissional");
     mostrarEtapaModal("step-profissional");
     return;
   }
   if (stepDados.classList.contains("active")) {
-    console.log("← Voltando de step-dados para step-horario");
+    console.log("Volta: step-dados → step-horario");
     mostrarEtapaModal("step-horario");
     return;
   }
 });
 
 // =================================================================================
-// 12) VALIDAÇÃO DOS CAMPOS “Nome” e “Telefone” (step-dados)
+// 12) VALIDAÇÃO DOS CAMPOS (step-dados)
 // =================================================================================
 inputNomeModal.addEventListener("input", () => {
   nomeCliente = inputNomeModal.value.trim();
@@ -600,7 +582,7 @@ async function enviarAgendamentoModal() {
 }
 
 // =================================================================================
-// 14) TOAST DE SUCESSO (FIXO)
+// 14) TOAST DE SUCESSO
 // =================================================================================
 function mostrarToastSucesso(msg) {
   const toast = document.createElement("div");

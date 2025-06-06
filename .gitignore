@@ -68,5 +68,8 @@ node_modules/
 # dataconnect generated files
 .dataconnect
 
+# Ignorar credenciais (caso volte a aparecer)
 functions/import/serviceAccountKey.json.json
-# Firebase Hosting files
+
+# Ignorar pastas node_modules caso alguma ainda exista
+**/node_modules/
