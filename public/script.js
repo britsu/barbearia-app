@@ -1,301 +1,535 @@
-// ----------------------------------------
-// 3.1) Constantes e variáveis globais
-// ----------------------------------------
+// =================================================================================
+// 1) VARIÁVEIS GLOBAIS E ESTADO DO AGENDAMENTO
+// =================================================================================
+const API_BASE = "https://us-central1-barbeariaagendamento-1e8c6.cloudfunctions.net";
 
 let listaServicos = [];
 let listaProfissionais = [];
-let listaTurnos       = [];
+let listaTurnos = [];
 
-// Estado atual do agendamento:
-let estado = {
-  servicoSelecionado: null,   // objeto { id_servico, nome_servico, preco, duracao_min }
-  dataSelecionada:    null,   // string no formato "YYYY-MM-DD"
-  profissionalID:     null,   // id_profissional (string)
-  profissionalNome:   null,   // nome_profissional (string)
-  horarioSelecionado: null,   // string "HH:MM"
-  idTurnoSelecionado: null    // id_turno (string)
+const estado = {
+  etapa: 1,
+  servicoSelecionado: null,
+  dataSelecionada: null,
+  profissionalSelecionado: null,
+  turnoSelecionado: null,
+  nomeCliente: "",
+  telefoneCliente: ""
 };
 
-// ----------------------------------------
-// 3.2) Ao carregar DOMContentLoaded → inicializar
-// ----------------------------------------
-document.addEventListener('DOMContentLoaded', async () => {
+const btnVoltar = document.getElementById("btnVoltar");
+const tituloHeader = document.getElementById("tituloHeader");
+const appMain = document.getElementById("appMain");
+const btnAcaoFooter = document.getElementById("btnAcaoFooter");
+
+// =================================================================================
+// 2) AO CARREGAR PÁGINA: BUSCAR DADOS E MONTAR TELA 1
+// =================================================================================
+document.addEventListener("DOMContentLoaded", async () => {
   await carregarServicos();
   await carregarProfissionais();
+  montarTelaServicos();
 });
 
-// ----------------------------------------
-// Função: carregarServicos → busca no Firestore
-// ----------------------------------------
+// =================================================================================
+// 3) FUNÇÕES DE BUSCA (SERVIÇOS E PROFISSIONAIS)
+// =================================================================================
 async function carregarServicos() {
   try {
-    const snapshot = await db.collection('servicos').get();
-    listaServicos = snapshot.docs.map(doc => {
-      const dados = doc.data();
-      return {
-        id_servico: doc.id,
-        nome_servico: dados.nome_servico,
-        preco: dados.preco,
-        duracao_min: dados.duracao_min
-      };
-    });
-    montarCardsServicos();
+    const resp = await fetch(`${API_BASE}/getServicos`);
+    if (!resp.ok) throw new Error("Falha ao buscar serviços");
+    listaServicos = await resp.json();
   } catch (err) {
-    console.error('Erro ao buscar serviços no Firestore:', err);
+    console.error("Erro carregarServicos:", err);
+    appMain.innerHTML = `
+      <p style="text-align:center;color:var(--cor-error);margin-top:20px;">
+        Não foi possível carregar os serviços. Tente novamente mais tarde.
+      </p>`;
   }
 }
 
-// ----------------------------------------
-// Função: montarCardsServicos
-// ----------------------------------------
-function montarCardsServicos() {
-  const container = document.getElementById('listaServicosContainer');
-  container.innerHTML = '';
-
-  listaServicos.forEach(serv => {
-    const card = document.createElement('div');
-    card.classList.add('card-servico');
-    card.dataset.id = serv.id_servico;
-
-    card.innerHTML = `
-      <h3>${serv.nome_servico.toUpperCase()}</h3>
-      <p>${serv.duracao_min} min</p>
-    `;
-
-    card.addEventListener('click', () => {
-      iniciarFluxoAgendamento(serv);
-    });
-
-    container.appendChild(card);
-  });
-}
-
-// ----------------------------------------
-// Função: iniciarFluxoAgendamento(servico)
-// ----------------------------------------
-function iniciarFluxoAgendamento(servico) {
-  estado.servicoSelecionado = servico;
-
-  document.getElementById('secServicos').classList.add('hidden');
-  document.getElementById('secAgendamento').classList.remove('hidden');
-
-  document.getElementById('textoServicoEscolhido').innerText = servico.nome_servico;
-
-  const inputDate = document.getElementById('inputData');
-  const hoje = new Date().toISOString().split('T')[0];
-  inputDate.setAttribute('min', hoje);
-
-  inputDate.addEventListener('change', onDataSelecionada);
-  document.getElementById('passoEscolherData').scrollIntoView({ behavior: 'smooth' });
-}
-
-// ----------------------------------------
-// Função: onDataSelecionada()
-// ----------------------------------------
-async function onDataSelecionada(e) {
-  const data = e.target.value;
-  if (!data) return;
-
-  estado.dataSelecionada = data;
-  document.getElementById('passoEscolherProfissional').classList.remove('hidden');
-
-  // Limpa dropdown e coloca opção padrão
-  const selectProf = document.getElementById('selectProfissional');
-  selectProf.innerHTML = '<option value="">-- Selecione um profissional --</option>';
-
-  // Filtra apenas profissionais que atendem ao serviço selecionado
-  const idServ = estado.servicoSelecionado.id_servico;
-  const profsFiltrados = listaProfissionais.filter(p =>
-    p.servicos_disponiveis.includes(idServ)
-  );
-
-  profsFiltrados.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id_profissional;
-    opt.text = p.nome_profissional;
-    selectProf.appendChild(opt);
-  });
-
-  selectProf.addEventListener('change', onProfissionalSelecionado);
-  document.getElementById('passoEscolherProfissional').scrollIntoView({ behavior: 'smooth' });
-}
-
-// ----------------------------------------
-// Função: carregarProfissionais → busca no Firestore
-// ----------------------------------------
 async function carregarProfissionais() {
   try {
-    const snapshot = await db.collection('profissionais').get();
-    listaProfissionais = snapshot.docs.map(doc => {
-      const dados = doc.data();
-      return {
-        id_profissional: doc.id,
-        nome_profissional: dados.nome_profissional,
-        servicos_disponiveis: dados.servicos_disponiveis // array de IDs
-      };
-    });
+    const resp = await fetch(`${API_BASE}/getProfissionais`);
+    if (!resp.ok) throw new Error("Falha ao buscar profissionais");
+    listaProfissionais = await resp.json();
   } catch (err) {
-    console.error('Erro ao buscar profissionais no Firestore:', err);
+    console.error("Erro carregarProfissionais:", err);
   }
 }
 
-// ----------------------------------------
-// Função: onProfissionalSelecionado()
-// ----------------------------------------
-async function onProfissionalSelecionado(e) {
-  const idProf = e.target.value;
-  if (!idProf) return;
+// =================================================================================
+// 4) TELA 1: MONTAR CARDS DE SERVIÇOS
+// =================================================================================
+function montarTelaServicos() {
+  estado.etapa = 1;
+  btnVoltar.classList.add("hidden");
+  tituloHeader.innerText = "Selecione seu serviço";
+  btnAcaoFooter.disabled = true;
+  btnAcaoFooter.innerText = "Próximo";
 
-  const profObj = listaProfissionais.find(p => p.id_profissional === idProf);
-  estado.profissionalID   = idProf;
-  estado.profissionalNome = profObj.nome_profissional;
+  appMain.innerHTML = `
+    <section id="secServicos">
+      <h2>Serviços Disponíveis</h2>
+      <div id="listaServicosContainer">
+        ${listaServicos
+          .map((serv) => {
+            // Garante que 'preco' seja um número antes de chamar toFixed
+            const precoNumerico = Number(serv.preco);
+            const precoFmt = isNaN(precoNumerico) ? "0.00" : precoNumerico.toFixed(2);
+            // Garante que 'duracao_min' seja exibido corretamente (caso venha como string)
+            const duracaoFmt = Number(serv.duracao_min) || 0;
+            return `
+          <div class="card-servico" data-id="${serv.id_servico}">
+            <img class="iconServico" src="https://via.placeholder.com/48" alt="${serv.nome_servico}" />
+            <div class="texto-servico">
+              <h3>${serv.nome_servico}</h3>
+              <p>${duracaoFmt} min • R$ ${precoFmt}</p>
+            </div>
+            <div class="indicatorserv"></div>
+          </div>
+        `;
+          })
+          .join("")}
+      </div>
+    </section>
+  `;
 
-  document.getElementById('passoEscolherHorario').classList.remove('hidden');
-  const containerHorarios = document.getElementById('botoesHorariosContainer');
-  containerHorarios.innerHTML = '';
-
-  // 1) Carrega turnos disponíveis do Firestore
-  await carregarTurnosDisponiveis(estado.dataSelecionada, estado.servicoSelecionado.id_servico);
-
-  // 2) Filtra turnos apenas para este profissional
-  const turnosParaProf = listaTurnos.filter(t => t.id_profissional === idProf && t.status === 'livre');
-
-  // 3) Monta botões de horário
-  turnosParaProf.forEach(t => {
-    const btn = document.createElement('button');
-    btn.classList.add('btn-horario');
-    btn.innerText = t.hora;
-    btn.dataset.idTurno = t.id_turno;
-
-    btn.addEventListener('click', () => {
-      onHorarioSelecionado(t.hora, t.id_turno, btn);
+  document.querySelectorAll(".card-servico").forEach((card) => {
+    card.addEventListener("click", () => {
+      const id = card.dataset.id;
+      estado.servicoSelecionado = listaServicos.find((s) => s.id_servico === id);
+      montarTelaDataProfissional();
     });
-
-    containerHorarios.appendChild(btn);
   });
-
-  document.getElementById('passoEscolherHorario').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ----------------------------------------
-// Função: carregarTurnosDisponiveis (busca no Firestore)
-// ----------------------------------------
-async function carregarTurnosDisponiveis(dataEscolhida, idServico) {
-  listaTurnos = [];
+// =================================================================================
+// 5) TELA 2: SELEÇÃO DE DATA E PROFISSIONAL
+// =================================================================================
+async function montarTelaDataProfissional() {
+  estado.etapa = 2;
+  estado.dataSelecionada = null;
+  estado.profissionalSelecionado = null;
+  btnVoltar.classList.remove("hidden");
+  btnVoltar.onclick = () => montarTelaServicos();
+  tituloHeader.innerText = "Data e Profissional";
+
+  appMain.innerHTML = `
+    <div class="calendario-e-profissionais">
+      <div class="calendario-container">
+        <div class="calendario-header">
+          <button id="prevMes">&lt;</button>
+          <h4 id="mesAno"></h4>
+          <button id="nextMes">&gt;</button>
+        </div>
+        <div class="dias-semana">
+          <div>Dom</div><div>Seg</div><div>Ter</div>
+          <div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+        </div>
+        <div class="grid-dias" id="gridDias"></div>
+      </div>
+      <div class="lista-profissionais" id="listaProfissionaisContainer"></div>
+    </div>
+  `;
+
+  montarCalendario();
+
+  const servID = estado.servicoSelecionado.id_servico;
+  const profsFiltrados = listaProfissionais.filter((p) =>
+    Array.isArray(p.servicos_disponiveis) && p.servicos_disponiveis.includes(servID)
+  );
+  const listaDiv = document.getElementById("listaProfissionaisContainer");
+
+  if (profsFiltrados.length === 0) {
+    listaDiv.innerHTML = `
+      <p style="text-align:center;color:var(--cor-textoSec);margin:16px;">
+        Nenhum profissional atende esse serviço.
+      </p>`;
+  } else {
+    listaDiv.innerHTML = profsFiltrados
+      .map(
+        (p) => `
+      <div class="item-profissional" data-id="${p.id_profissional}">
+        <img class="avatar" src="${p.foto_url || "https://via.placeholder.com/48"}" alt="${p.nome_profissional}" />
+        <div class="info-prof">
+          <h4>${p.nome_profissional}</h4>
+          <p>Especialista em …</p>
+        </div>
+        <div class="seta-direita">›</div>
+      </div>
+    `
+      )
+      .join("");
+
+    document.querySelectorAll(".item-profissional").forEach((item) => {
+      item.addEventListener("click", () => {
+        const idP = item.dataset.id;
+        estado.profissionalSelecionado = profsFiltrados.find((x) => x.id_profissional === idP);
+        // Se a data já estiver selecionada, podemos avançar automaticamente:
+        if (estado.dataSelecionada) {
+          montarTelaHorarios();
+        } else {
+          // Caso contrário, aguardamos o clique no calendário + ativamos o botão
+          atualizarFooter(false);
+        }
+      });
+    });
+  }
+
+  // Inicialmente, desabilita o botão “Próximo”
+  atualizarFooter(false);
+}
+
+// =================================================================================
+// 6) FUNÇÕES DO CALENDÁRIO
+// =================================================================================
+let mesAtual = new Date().getMonth();
+let anoAtual = new Date().getFullYear();
+
+function obterMesAno() {
+  const meses = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
+  return `${meses[mesAtual]} ${anoAtual}`;
+}
+
+function montarCalendario() {
+  const grid = document.getElementById("gridDias");
+  const mesAnoLabel = document.getElementById("mesAno");
+  grid.innerHTML = "";
+  mesAnoLabel.innerText = obterMesAno();
+
+  const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
+  const totalDias = new Date(anoAtual, mesAtual + 1, 0).getDate();
+
+  // Preenche os “espaços vazios” antes do dia 1
+  for (let i = 0; i < primeiroDia; i++) {
+    const vazio = document.createElement("div");
+    vazio.classList.add("dia-calendario", "disabled");
+    vazio.innerText = "";
+    grid.appendChild(vazio);
+  }
+
+  // Preenche cada dia do mês
+  for (let dia = 1; dia <= totalDias; dia++) {
+    const cel = document.createElement("div");
+    const hoje = new Date();
+    const dtCompare = new Date(anoAtual, mesAtual, dia);
+
+    if (dtCompare < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())) {
+      // dias passados
+      cel.classList.add("dia-calendario", "disabled");
+      cel.innerText = dia;
+    } else {
+      // dias disponíveis
+      cel.classList.add("dia-calendario", "available");
+      cel.innerText = dia;
+      cel.addEventListener("click", () => {
+        document.querySelectorAll(".dia-calendario.available").forEach((d) =>
+          d.classList.remove("selected")
+        );
+        cel.classList.add("selected");
+        const dd = String(dia).padStart(2, "0");
+        const mm = String(mesAtual + 1).padStart(2, "0");
+        estado.dataSelecionada = `${anoAtual}-${mm}-${dd}`;
+        // só habilita “Próximo” se já tiver escolhido um profissional
+        const habilitar = estado.profissionalSelecionado !== null;
+        atualizarFooter(habilitar);
+      });
+    }
+    grid.appendChild(cel);
+  }
+
+  document.getElementById("prevMes").onclick = () => {
+    if (mesAtual > 0) mesAtual--;
+    else {
+      mesAtual = 11;
+      anoAtual--;
+    }
+    montarCalendario();
+  };
+  document.getElementById("nextMes").onclick = () => {
+    if (mesAtual < 11) mesAtual++;
+    else {
+      mesAtual = 0;
+      anoAtual++;
+    }
+    montarCalendario();
+  };
+}
+
+// =================================================================================
+// 7) TELA 3: SELEÇÃO DE HORÁRIOS
+// =================================================================================
+async function montarTelaHorarios() {
+  estado.etapa = 3;
+  estado.turnoSelecionado = null;
+  btnVoltar.classList.remove("hidden");
+  btnVoltar.onclick = () => montarTelaDataProfissional();
+  tituloHeader.innerText = "Escolha o horário";
+
+  // Limpa o container e inicia a busca
+  appMain.innerHTML = `
+    <div class="lista-horarios" id="listaHorariosContainer"></div>
+  `;
+
   try {
-    // Exemplo: coleção raiz “turnos”
-    const snapshot = await db
-      .collection('turnos')
-      .where('data', '==', dataEscolhida)
-      .get();
+    const dataSel = estado.dataSelecionada;
+    const idServ = estado.servicoSelecionado.id_servico;
+    const url = `${API_BASE}/getTurnos?data=${dataSel}&idServico=${idServ}`;
+    const resp = await fetch(url);
 
-    listaTurnos = snapshot.docs.map(doc => {
-      const t = doc.data();
-      return {
-        id_turno: doc.id,
-        data: t.data,
-        hora: t.hora,
-        id_profissional: t.id_profissional,
-        status: t.status,
-        servicoID: t.servicoID // se existir esse campo
-      };
+    if (!resp.ok) throw new Error("Erro ao buscar turnos");
+    const todosTurnos = await resp.json();
+
+    // Filtra somente os turnos do profissional selecionado
+    listaTurnos = todosTurnos.filter(
+      (t) => t.id_profissional === estado.profissionalSelecionado.id_profissional
+    );
+    const container = document.getElementById("listaHorariosContainer");
+
+    if (listaTurnos.length === 0) {
+      // Se não houver horários, mostra mensagem + botão “Voltar”
+      container.innerHTML = `
+        <p style="text-align:center;color:var(--cor-textoSec);margin:16px 0;">
+          Sem horários disponíveis
+        </p>
+        <button id="btnVoltarHorario"
+          style="margin:0 auto;display:block;padding:8px 16px;
+                 border:1px solid var(--cor-texto);
+                 border-radius:20px;
+                 color:var(--cor-texto);
+                 background:none;">
+          Voltar
+        </button>
+      `;
+      document.getElementById("btnVoltarHorario").onclick = () => montarTelaDataProfissional();
+      atualizarFooter(false);
+      return;
+    }
+
+    // Caso haja horários, monta botões para cada um
+    container.innerHTML = listaTurnos
+      .map(
+        (t) => `
+      <button class="btn-horario available" data-id="${t.id_turno}">
+        ${t.hora}
+      </button>
+    `
+      )
+      .join("");
+
+    // Adiciona evento de clique em cada botão de horário
+    document.querySelectorAll(".btn-horario.available").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".btn-horario").forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        const idTurno = btn.dataset.id;
+        estado.turnoSelecionado = listaTurnos.find((x) => x.id_turno === idTurno);
+        atualizarFooter(true); // habilita próximo, pois já escolheu horário
+      });
     });
   } catch (err) {
-    console.error('Erro ao buscar turnos no Firestore:', err);
-  }
-}
-
-// ----------------------------------------
-// Função: onHorarioSelecionado(horario, idTurno, btn)
-// ----------------------------------------
-function onHorarioSelecionado(horario, idTurno, btn) {
-  estado.horarioSelecionado = horario;
-  estado.idTurnoSelecionado = idTurno;
-
-  document.querySelectorAll('.btn-horario').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-
-  document.getElementById('passoResumo').classList.remove('hidden');
-  document.getElementById('resumoServico').innerText       = estado.servicoSelecionado.nome_servico;
-  document.getElementById('resumoData').innerText         = estado.dataSelecionada.split('-').reverse().join('/');
-  document.getElementById('resumoProfissional').innerText = estado.profissionalNome;
-  document.getElementById('resumoHorario').innerText      = estado.horarioSelecionado;
-
-  document.getElementById('passoDadosCliente').classList.remove('hidden');
-  document.getElementById('passoResumo').scrollIntoView({ behavior: 'smooth' });
-
-  const inputNome = document.getElementById('nomeCliente');
-  const inputTel  = document.getElementById('telefoneCliente');
-  const btnAgendar = document.getElementById('btnConfirmarAgendamento');
-
-  inputNome.value = '';
-  inputTel.value  = '';
-  btnAgendar.disabled = true;
-
-  inputNome.addEventListener('input', () => {
-    btnAgendar.disabled = !(inputNome.value.trim() && inputTel.value.trim());
-  });
-  inputTel.addEventListener('input', () => {
-    btnAgendar.disabled = !(inputNome.value.trim() && inputTel.value.trim());
-  });
-
-  btnAgendar.addEventListener('click', onConfirmarAgendamento);
-}
-
-// ----------------------------------------
-// Função: onConfirmarAgendamento() → grava no Firestore
-// ----------------------------------------
-async function onConfirmarAgendamento() {
-  const nome  = document.getElementById('nomeCliente').value.trim();
-  const tel   = document.getElementById('telefoneCliente').value.trim();
-  const idTurno = estado.idTurnoSelecionado;
-  const idServ  = estado.servicoSelecionado.id_servico;
-  const idProf  = estado.profissionalID;
-  const dataSel = estado.dataSelecionada;
-  const horaSel = estado.horarioSelecionado;
-
-  if (!nome || !tel) {
-    document.getElementById('msgAgendamento').innerText = 'Por favor, preencha nome e telefone.';
+    console.error("Erro montarTelaHorários:", err);
+    appMain.innerHTML = `
+      <p style="text-align:center;color:var(--cor-error);margin-top:20px;">
+        Não foi possível carregar horários. Tente novamente.
+      </p>`;
+    atualizarFooter(false);
     return;
   }
 
-  try {
-    // 1) Cria reserva
-    const reservaData = {
-      id_turno: idTurno,
-      id_servico: idServ,
-      id_profissional: idProf,
-      nome_cliente: nome,
-      telefone_cliente: tel,
-      data: dataSel,
-      hora: horaSel,
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    const docRefReserva = await db.collection('reservas').add(reservaData);
+  // Ao renderizar a tela, sempre desabilita “Próximo” até o usuário escolher um horário
+  atualizarFooter(false);
+}
 
-    // 2) Atualiza turno para “reservado”
-    await db.collection('turnos').doc(idTurno).update({
-      status: 'reservado',
-      reservaID: docRefReserva.id
+// =================================================================================
+// 8) TELA 4: FORMULÁRIO DO CLIENTE
+// =================================================================================
+function montarTelaDadosCliente() {
+  estado.etapa = 4;
+  btnVoltar.classList.remove("hidden");
+  btnVoltar.onclick = () => montarTelaHorarios();
+  tituloHeader.innerText = "Seus Dados";
+
+  appMain.innerHTML = `
+    <div class="form-cliente-container">
+      <div class="form-cliente-group">
+        <input type="text" id="inputNome" />
+        <label for="inputNome">Nome completo</label>
+        <div class="erro-msg" id="erroNome">Nome obrigatório</div>
+      </div>
+      <div class="form-cliente-group">
+        <input type="tel" id="inputTelefone" />
+        <label for="inputTelefone">WhatsApp (somente números)</label>
+        <div class="erro-msg" id="erroTelefone">Telefone inválido</div>
+      </div>
+    </div>
+  `;
+
+  const inpNome = document.getElementById("inputNome");
+  const inpTel = document.getElementById("inputTelefone");
+  const errNome = document.getElementById("erroNome");
+  const errTel = document.getElementById("erroTelefone");
+
+  inpNome.addEventListener("input", () => {
+    estado.nomeCliente = inpNome.value.trim();
+    if (estado.nomeCliente.length < 2) {
+      errNome.style.display = "block";
+      errNome.innerText = "Nome obrigatório";
+      atualizarFooter(false);
+    } else {
+      errNome.style.display = "none";
+      if (validarTelefone(inpTel.value)) atualizarFooter(true);
+    }
+  });
+
+  inpTel.addEventListener("input", () => {
+    estado.telefoneCliente = inpTel.value.replace(/\D/g, "");
+    if (!validarTelefone(inpTel.value)) {
+      errTel.style.display = "block";
+      errTel.innerText = "Telefone inválido";
+      atualizarFooter(false);
+    } else {
+      errTel.style.display = "none";
+      if (estado.nomeCliente.length >= 2) atualizarFooter(true);
+    }
+  });
+
+  // Garante que o botão “Confirmar” comece desabilitado
+  atualizarFooter(false);
+}
+
+function validarTelefone(tel) {
+  const apenasDigitos = tel.replace(/\D/g, "");
+  return apenasDigitos.length >= 10 && apenasDigitos.length <= 11;
+}
+
+// =================================================================================
+// 9) TELA 5: ENVIAR AGENDAMENTO E TOAST
+// =================================================================================
+async function enviarAgendamento() {
+  estado.etapa = 5;
+  btnAcaoFooter.disabled = true;
+  btnAcaoFooter.innerHTML = `
+    <span class="spinner"
+      style="border:3px solid var(--cor-accent);
+             border-top:3px solid rgba(255,255,255,0.2);
+             width:18px;height:18px;
+             border-radius:50%;
+             display:inline-block;
+             animation:spin 1s linear infinite;">
+    </span>
+  `;
+
+  const payload = {
+    id_turno: estado.turnoSelecionado.id_turno,
+    id_servico: estado.servicoSelecionado.id_servico,
+    nome_cliente: estado.nomeCliente,
+    telefone_cliente: estado.telefoneCliente
+  };
+
+  try {
+    const resp = await fetch(`${API_BASE}/postAgendar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
 
-    // 3) Abre WhatsApp e mostra mensagem
-    const mensagem = `Olá, ${nome}!
-Seu agendamento para "${estado.servicoSelecionado.nome_servico}" está confirmado em ${dataSel} às ${horaSel} com ${estado.profissionalNome}.`;
-    const urlWhats = `https://wa.me/55${tel}?text=${encodeURIComponent(mensagem)}`;
+    if (!resp.ok) throw new Error("Falha no agendamento");
 
-    document.getElementById('msgAgendamento').innerText  = 'Agendamento enviado! Abrindo WhatsApp…';
-    document.getElementById('msgAgendamento').classList.add('sucesso');
-    window.open(urlWhats, '_blank');
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error || "Falha no agendamento");
 
-    // 4) (Opcional) Recarrega a página após 3 segundos
+    mostrarToastSucesso("Agendamento registrado! Redirecionando…");
     setTimeout(() => {
-      window.location.reload();
-    }, 3000);
-
+      window.location.href = data.link_whatsapp;
+    }, 1000);
   } catch (err) {
-    console.error('Erro ao gravar agendamento no Firestore:', err);
-    document.getElementById('msgAgendamento').innerText = 'Erro ao enviar agendamento.';
-    document.getElementById('msgAgendamento').classList.remove('sucesso');
+    console.error("Erro ao enviar agendamento:", err);
+    mostrarToastErro("Erro ao agendar. Tente novamente.");
+    btnAcaoFooter.disabled = false;
+    btnAcaoFooter.innerText = "Confirmar";
   }
 }
+
+function mostrarToastSucesso(msg) {
+  const toast = document.createElement("div");
+  toast.classList.add("toast-sucesso");
+  toast.innerText = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 2000);
+}
+
+function mostrarToastErro(msg) {
+  alert(msg);
+}
+
+// =================================================================================
+// 10) FUNÇÃO RESPONSÁVEL PELO BOTÃO DO FOOTER
+// =================================================================================
+function atualizarFooter(habilitar) {
+  btnAcaoFooter.disabled = !habilitar;
+
+  switch (estado.etapa) {
+    case 1:
+      btnAcaoFooter.innerText = "Próximo";
+      btnAcaoFooter.onclick = montarTelaDataProfissional;
+      break;
+
+    case 2:
+      btnAcaoFooter.innerText = "Próximo";
+      // Só avança se data + profissional já estiverem definidos
+      if (habilitar) {
+        btnAcaoFooter.onclick = montarTelaHorarios;
+      } else {
+        btnAcaoFooter.onclick = null;
+      }
+      break;
+
+    case 3:
+      btnAcaoFooter.innerText = "Próximo";
+      // Só avança se um horário tiver sido selecionado
+      if (habilitar) {
+        btnAcaoFooter.onclick = montarTelaDadosCliente;
+      } else {
+        btnAcaoFooter.onclick = null;
+      }
+      break;
+
+    case 4:
+      btnAcaoFooter.innerText = "Confirmar";
+      // Só envia se nome + telefone forem válidos (habilitar===true)
+      if (habilitar) {
+        btnAcaoFooter.onclick = enviarAgendamento;
+      } else {
+        btnAcaoFooter.onclick = null;
+      }
+      break;
+
+    default:
+      btnAcaoFooter.innerText = "Próximo";
+      btnAcaoFooter.onclick = null;
+  }
+}
+
+/* Animação spinner (adicionar no CSS caso não esteja):
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+*/

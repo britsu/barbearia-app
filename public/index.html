@@ -3,33 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Barbearia – Agendamento Online</title>
+  <title>barbear.ai – Agendamento Online</title>
 
-  <!-- ============================= -->
-  <!--      0) Seu CSS padrão      -->
-  <!-- ============================= -->
+  <!-- 1) Link para o novo style.css -->
   <link rel="stylesheet" href="style.css" />
 
-  <!-- ============================= -->
-  <!--  1) SDK do Firebase (compat)  -->
-  <!-- ============================= -->
-  <!-- 
-    Aqui carregamos as bibliotecas “compat” do Firebase,
-    para podermos usar firebase.initializeApp(...) e firebase.firestore().
-    É importante que isso esteja ANTES do seu script.js, para que
-    a variável global `db` seja definida antes de seu código rodar.
-  -->
+  <!-- 2) SDKs do Firebase (compat) – mantidos antes do script.js -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- ============================= -->
-  <!--  2) Inicialização do Firebase  -->
-  <!-- ============================= -->
+  <!-- 3) Inicialização do Firebase (atribua seu firebaseConfig real) -->
   <script>
-    // ┌─────────────────────────────────────────────────────────────────────────────┐
-    // │   Substitua abaixo pelos valores EXATOS do seu projeto Firebase, obtidos   │
-    // │   no Console → Configurações do Projeto → SDK do aplicativo (cópia)        │
-    // └─────────────────────────────────────────────────────────────────────────────┘
     const firebaseConfig = {
       apiKey: "AIzaSyBFktkGF1JdVNUpiK7n4nzko5a45n4cEDQ",
       authDomain: "barbeariaagendamento-1e8c6.firebaseapp.com",
@@ -38,121 +22,37 @@
       messagingSenderId: "352272256645",
       appId: "1:352272256645:web:a3cf359aa587cce699a3ec"
     };
-
-    // Inicializa o Firebase App
     firebase.initializeApp(firebaseConfig);
-
-    // Inicializa o Firestore e deixa disponível em `db`
     const db = firebase.firestore();
-
-    // (Opcional) Você pode logar no console para verificar:
-    // console.log("Firestore iniciado em projeto:", db.app.options.projectId);
+    // opcional: console.log("Firebase iniciado:", db.app.options.projectId);
   </script>
 </head>
 <body>
-  <header>
-    <h1>Barbearia – Agendamento Online</h1>
+  <!-- ═════════════════════════════════════╗
+       HEADER FIXO EM CIMA
+  ═════════════════════════════════════╝ -->
+  <header id="appHeader">
+    <button id="btnVoltar" class="hidden">← Voltar</button>
+    <h1 id="tituloHeader">barbear.ai</h1>
+    <div id="spacerHeader"></div>
   </header>
 
-  <main>
-    <!-- ========================================== -->
-    <!--   3) Seção de Seleção de Serviços         -->
-    <!-- ========================================== -->
-    <section id="secServicos">
-      <h2>Serviços Disponíveis</h2>
-      <div id="listaServicosContainer">
-        <!--
-          Aqui o seu script.js irá inserir dinamicamente
-          os "cards" de serviço (cada div.card-servico),
-          após fazer a consulta ao Firestore.
-        -->
-      </div>
-    </section>
-
-    <hr />
-
-    <!-- ========================================== -->
-    <!--   4) Seção de Agendamento (escondida)      -->
-    <!-- ========================================== -->
-    <section id="secAgendamento" class="hidden">
-      <h2>Agendar Serviço</h2>
-
-      <!-- Passo 1: mostrar serviço selecionado -->
-      <div id="passoServicoEscolhido">
-        <p>
-          Serviço selecionado:
-          <span id="textoServicoEscolhido"></span>
-        </p>
-      </div>
-
-      <!-- Passo 2: escolha da data -->
-      <div id="passoEscolherData">
-        <label for="inputData">Selecione a data:</label>
-        <input type="date" id="inputData" min="" />
-      </div>
-
-      <!-- Passo 3: dropdown de profissionais (inicialmente hidden) -->
-      <div id="passoEscolherProfissional" class="hidden">
-        <label for="selectProfissional">Selecione o profissional:</label>
-        <select id="selectProfissional">
-          <option value="">-- Selecione um profissional --</option>
-        </select>
-      </div>
-
-      <!-- Passo 4: botões de horário (inicialmente hidden) -->
-      <div id="passoEscolherHorario" class="hidden">
-        <p>Escolha um horário disponível:</p>
-        <div id="botoesHorariosContainer">
-          <!--
-            O script.js irá popular este contêiner
-            com botões, baseados nos turnos livres do Firestore.
-          -->
-        </div>
-      </div>
-
-      <!-- Passo 5: resumo do agendamento (inicialmente hidden) -->
-      <div id="passoResumo" class="hidden">
-        <h3>Resumo do Agendamento:</h3>
-        <ul>
-          <li>
-            <strong>Serviço:</strong> <span id="resumoServico"></span>
-          </li>
-          <li>
-            <strong>Data:</strong> <span id="resumoData"></span>
-          </li>
-          <li>
-            <strong>Profissional:</strong> <span id="resumoProfissional"></span>
-          </li>
-          <li>
-            <strong>Horário:</strong> <span id="resumoHorario"></span>
-          </li>
-        </ul>
-      </div>
-
-      <!-- Passo 6: dados do cliente (nome + telefone + botão) -->
-      <div id="passoDadosCliente" class="hidden">
-        <label for="nomeCliente">Nome completo:</label>
-        <input type="text" id="nomeCliente" placeholder="Seu nome" />
-
-        <label for="telefoneCliente">Telefone (WhatsApp):</label>
-        <input type="tel" id="telefoneCliente" placeholder="63991234567" />
-
-        <!-- O botão só será habilitado quando nome e telefone estiverem preenchidos -->
-        <button id="btnConfirmarAgendamento" disabled>AGENDAR</button>
-      </div>
-
-      <!-- Mensagem de feedback (sucesso ou erro) -->
-      <div id="msgAgendamento" class="msg"></div>
-    </section>
+  <!-- ═════════════════════════════════════╗
+       CONTEÚDO DINÂMICO (renderizado pelo JS)
+  ═════════════════════════════════════╝ -->
+  <main id="appMain">
+    <!-- Ao iniciar, o script.js vai injetar
+         a tela “Selecionar serviço”. -->
   </main>
 
-  <!-- ============================= -->
-  <!--  5) Seu script principal      -->
-  <!-- ============================= -->
-  <!-- 
-    O script.js foi escrito para usar `db` (Firestore) diretamente.
-    Certifique-se de que este <script> esteja APÓS a inicialização do Firebase acima.
-  -->
+  <!-- ═════════════════════════════════════╗
+       FOOTER FIXO COM BOTÃO “PRÓXIMO/CONFIRMAR”
+  ═════════════════════════════════════╝ -->
+  <footer id="appFooter">
+    <button id="btnAcaoFooter" disabled>Próximo</button>
+  </footer>
+
+  <!-- 4) Script principal (lógica de UI/UX + Firebase) -->
   <script src="script.js"></script>
 </body>
 </html>
