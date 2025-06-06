@@ -1,271 +1,597 @@
-// functions/index.js
+// public/script.js
 
-/**
- * Import dos módulos necessários:
- * - onRequest: para criar HTTP trigger (Cloud Function v2)
- * - logger: para logs
- * - cors: para habilitar CORS (permite que o front-end local chame estas funções)
- * - admin: para inicializar o Firebase Admin e acessar o Firestore
- */
-const { onRequest } = require("firebase-functions/v2/https");
-const logger = require("firebase-functions/logger");
-const admin = require("firebase-admin");
-const cors = require("cors")({ origin: true });
+// =================================================================================
+// 1) VARIÁVEIS GLOBAIS E ESTADO DO AGENDAMENTO
+// =================================================================================
+const API_BASE = "https://us-central1-barbeariaagendamento-1e8c6.cloudfunctions.net";
 
-// Inicializa o Firebase Admin
-admin.initializeApp();
-const db = admin.firestore();
+let listaServicos = [];
+let listaProfissionais = [];
+let listaTurnos = [];
 
-/**
- * GET  /getServicos
- * Retorna todos os documentos da coleção "servicos" ordenados por nome_servico.
- * Cada documento sai com o formato:
- *   { id_servico: <ID do doc>, nome_servico: <string>, preco: <number>, duracao_min: <number>, … }
- */
-exports.getServicos = onRequest((req, res) => {
-  // Envolver em CORS para que seja possível chamar do frontend sem erro de bloqueio:
-  cors(req, res, async () => {
-    try {
-      const snapshot = await db
-        .collection("servicos")
-        .orderBy("nome_servico")
-        .get();
+// Estado global “lightweight” (serviço/data/profissional/horário/dados)
+let servicoSelecionado = null;
+let dataSelecionada = null;
+let profissionalSelecionado = null;
+let turnoSelecionado = null;
+let nomeCliente = "";
+let telefoneCliente = "";
 
-      const lista = snapshot.docs.map(doc => ({
-        id_servico: doc.id,
-        ...doc.data()
-      }));
+// Referências a elementos estáticos
+const btnVoltar = document.getElementById("btnVoltar");
+const tituloHeader = document.getElementById("tituloHeader");
+const appMain = document.getElementById("appMain");
 
-      return res.status(200).json(lista);
-    } catch (erro) {
-      logger.error("Erro em getServicos:", erro);
-      return res
-        .status(500)
-        .json({ error: "Não foi possível buscar serviços." });
-    }
-  });
+// Modal (etapas)
+const modalAgendamento    = document.getElementById("modalAgendamento");
+const btnFecharModal      = document.getElementById("btnFecharModal");
+const btnVoltarModal      = document.getElementById("btnVoltarModal");
+const btnAvancarModal     = document.getElementById("btnAvancarModal");
+
+const stepData            = document.getElementById("step-data");
+const stepProfissional    = document.getElementById("step-profissional");
+const stepHorario         = document.getElementById("step-horario");
+const stepDados           = document.getElementById("step-dados");
+
+// Calendário no modal (etapa “Data”)
+const mesAnoModal         = document.getElementById("mesAnoModal");
+const gridDiasModal       = document.getElementById("gridDiasModal");
+const prevMesModal        = document.getElementById("prevMesModal");
+const nextMesModal        = document.getElementById("nextMesModal");
+
+// Listas dentro do modal
+const listaProfissionaisModal = document.getElementById("listaProfissionaisModal");
+const listaHorariosModal      = document.getElementById("listaHorariosModal");
+
+// Input de dados do cliente (etapa “Dados”)
+const inputNomeModal       = document.getElementById("inputNomeModal");
+const inputTelefoneModal   = document.getElementById("inputTelefoneModal");
+const erroNomeModal        = document.getElementById("erroNomeModal");
+const erroTelefoneModal    = document.getElementById("erroTelefoneModal");
+
+// =================================================================================
+// 2) AO CARREGAR A PÁGINA: BUSCAR DADOS E MONTAR A TELA PRINCIPAL
+// =================================================================================
+document.addEventListener("DOMContentLoaded", async () => {
+  await carregarServicos();
+  await carregarProfissionais();
+  montarTelaPrincipal();
 });
 
-/**
- * GET  /getProfissionais
- * Retorna todos os documentos da coleção "profissionais" ordenados por nome_profissional.
- * Cada documento sai com o formato:
- *   { id_profissional: <ID do doc>, nome_profissional: <string>, servicos_disponiveis: [<ids>], foto_url: <string>, … }
- */
-exports.getProfissionais = onRequest((req, res) => {
-  cors(req, res, async () => {
-    try {
-      const snapshot = await db
-        .collection("profissionais")
-        .orderBy("nome_profissional")
-        .get();
+// =================================================================================
+// 3) BUSCAR DADOS DO FIRESTORE (via suas Cloud Functions)
+// =================================================================================
+async function carregarServicos() {
+  try {
+    const resp = await fetch(`${API_BASE}/getServicos`);
+    if (!resp.ok) throw new Error("Falha ao buscar serviços");
+    listaServicos = await resp.json();
+  } catch (err) {
+    console.error("Erro carregarServicos:", err);
+    appMain.innerHTML = `
+      <p style="text-align:center;color:var(--cor-error);margin-top:20px;">
+        Não foi possível carregar os serviços. Tente novamente mais tarde.
+      </p>`;
+  }
+}
 
-      const lista = snapshot.docs.map(doc => ({
-        id_profissional: doc.id,
-        ...doc.data()
-      }));
+async function carregarProfissionais() {
+  try {
+    const resp = await fetch(`${API_BASE}/getProfissionais`);
+    if (!resp.ok) throw new Error("Falha ao buscar profissionais");
+    listaProfissionais = await resp.json();
+  } catch (err) {
+    console.error("Erro carregarProfissionais:", err);
+    // prosseguimos com listaProfissionais vazia
+  }
+}
 
-      return res.status(200).json(lista);
-    } catch (erro) {
-      logger.error("Erro em getProfissionais:", erro);
-      return res
-        .status(500)
-        .json({ error: "Não foi possível buscar profissionais." });
-    }
+// =================================================================================
+// 4) MONTAR TELA PRINCIPAL: HERO + SERVIÇOS POR CATEGORIA
+// =================================================================================
+function montarTelaPrincipal() {
+  // Esvazia <main> para injetar o conteúdo dinamicamente
+  appMain.innerHTML = "";
+
+  // 4.1) Hero Section
+  const heroHTML = `
+    <section id="heroSection" class="hero-container">
+      <div class="hero-overlay"></div>
+      <div class="hero-content">
+        <h2>Agende seu horário em segundos</h2>
+        <button id="btnVerServicos" class="btn-primary">VER SERVIÇOS</button>
+      </div>
+    </section>
+  `;
+  appMain.insertAdjacentHTML("beforeend", heroHTML);
+
+  // 4.2) Quando o usuário clicar em “VER SERVIÇOS”, rola até a seção de serviços
+  document
+    .getElementById("btnVerServicos")
+    .addEventListener("click", () => {
+      const sec = document.querySelector("#servicosSection");
+      if (sec) {
+        sec.scrollIntoView({ behavior: "smooth" });
+      }
+    });
+
+  // 4.3) Seção de Serviços organizados por Categoria
+  const categorias = ["corte", "barba", "combos"];
+  const nomesCategorias = {
+    corte: "Cortes",
+    barba: "Barbas",
+    combos: "Combos"
+  };
+
+  let servicosHTML = `<section id="servicosSection" class="servicos-section">`;
+
+  categorias.forEach((cat) => {
+    servicosHTML += `
+      <div class="categoria-servicos" data-categoria="${cat}">
+        <h3 class="titulo-categoria">${nomesCategorias[cat]}</h3>
+        <div class="lista-cards" id="cards${cat.charAt(0).toUpperCase() + cat.slice(1)}">
+          <!-- Cards de serviços serão inseridos dinamicamente -->
+        </div>
+      </div>
+    `;
   });
-});
 
-/**
- * GET  /getTurnos?data=YYYY-MM-DD&idServico=<id>
- * 
- * Query parameters obrigatórios:
- *   data (string, formato "YYYY-MM-DD")
- *   idServico (string, ID do serviço)
- *
- * Lógica:
- *  1) Filtra todos os profissionais cujo array `servicos_disponiveis` contenha `idServico`.
- *  2) Busca na coleção "turnos" todos os documentos que tenham:
- *       - data == dataEscolhida
- *       - status == "livre"
- *       - id_profissional ∈ [lista de IDs filtrados]
- *     Ordena o resultado por hora.
- *  3) Retorna um array de turnos com cada objeto:
- *       { id_turno: <ID do doc>, data: <"YYYY-MM-DD">, hora: <"HH:MM">, id_profissional: <string>, status: "livre" }
- */
-exports.getTurnos = onRequest((req, res) => {
-  cors(req, res, async () => {
-    try {
-      const dataEscolhida = req.query.data;
-      const idServico = req.query.idServico;
+  servicosHTML += `</section>`;
+  appMain.insertAdjacentHTML("beforeend", servicosHTML);
 
-      if (!dataEscolhida || !idServico) {
-        return res
-          .status(400)
-          .json({ error: "Parâmetros 'data' e 'idServico' são obrigatórios." });
-      }
+  // 4.4) Para cada serviço retornado do Firestore, inserimos o card na categoria correta
+  listaServicos.forEach((serv) => {
+    const cat = serv.categoria || "outros"; // supondo que exista um campo “categoria” no seu docs
+    const containerId =
+      "cards" + cat.charAt(0).toUpperCase() + cat.slice(1);
+    const container = document.getElementById(containerId);
+    if (!container) return;
 
-      // 1) Filtrar profissionais que atendem a este serviço
-      const profSnapshot = await db
-        .collection("profissionais")
-        .where("servicos_disponiveis", "array-contains", idServico)
-        .get();
-      const profIDs = profSnapshot.docs.map((doc) => doc.id);
+    const precoNum = Number(serv.preco);
+    const precoFmt = isNaN(precoNum) ? "0.00" : precoNum.toFixed(2);
+    const duracaoNum = Number(serv.duracao_min) || 0;
 
-      // Se não houver nenhum profissional para este serviço, devolve array vazio
-      if (profIDs.length === 0) {
-        return res.status(200).json([]);
-      }
-
-      // 2) Buscar turnos livres desta data para esses profissionais
-      const turnosSnapshot = await db
-        .collection("turnos")
-        .where("data", "==", dataEscolhida)
-        .where("status", "==", "livre")
-        .where("id_profissional", "in", profIDs)
-        .orderBy("hora")
-        .get();
-
-      const listaTurnos = turnosSnapshot.docs.map((doc) => ({
-        id_turno: doc.id,
-        ...doc.data(),
-      }));
-
-      return res.status(200).json(listaTurnos);
-    } catch (erro) {
-      logger.error("Erro em getTurnos:", erro);
-      return res
-        .status(500)
-        .json({ error: "Não foi possível buscar turnos." });
-    }
+    const cardHTML = `
+      <div class="card-servico" data-id="${serv.id_servico}" data-categoria="${cat}">
+        <div class="texto-servico">
+          <h4 class="titulo-servico">${serv.nome_servico}</h4>
+          <p class="info-servico">${duracaoNum} min • R$ ${precoFmt}</p>
+        </div>
+        <div class="indicatorserv"></div>
+      </div>
+    `;
+    container.insertAdjacentHTML("beforeend", cardHTML);
   });
-});
 
-/**
- * POST /postAgendar
- *
- * Body JSON esperado:
- * {
- *   id_turno: <string>,
- *   id_servico: <string>,
- *   nome_cliente: <string>,
- *   telefone_cliente: <string>
- * }
- *
- * Fluxo:
- *  1) Verifica se o documento "turnos/{id_turno}" existe e está status == "livre".
- *  2) Se estiver livre, atualiza o campo status para "reservado".
- *  3) Lê os dados de "servicos/{id_servico}" e de "profissionais/{id_profissional}" (o id_profissional vem do próprio turno).
- *  4) Monta o texto de confirmação e gera link_whatsapp.
- *  5) Grava um novo documento em "agendamentos" com os campos:
- *       { id_turno, id_servico, nome_cliente, telefone_cliente, link_whatsapp, timestamp }
- *  6) Retorna { success: true, link_whatsapp } ou, em erro, { success: false, message: "…mensagem" }.
- */
-exports.postAgendar = onRequest((req, res) => {
-  cors(req, res, async () => {
-    try {
-      // Só aceitar POST
-      if (req.method !== "POST") {
-        return res
-          .status(405)
-          .json({ success: false, message: "Método não permitido." });
-      }
+  // 4.5) Agora adicionamos o “click” em cada card para abrir o modal de agendamento
+  document.querySelectorAll(".card-servico").forEach((card) => {
+    card.addEventListener("click", () => {
+      const id = card.dataset.id;
+      servicoSelecionado = listaServicos.find(
+        (s) => s.id_servico === id
+      );
+      abrirModalAgendamento();
+    });
+  });
+}
 
-      const {
-        id_turno,
-        id_servico,
-        nome_cliente,
-        telefone_cliente,
-      } = req.body;
+// =================================================================================
+// 5) ABRIR MODAL DE AGENDAMENTO
+//    - Inicializa a etapa “Data” e exibe o modal.
+// =================================================================================
+function abrirModalAgendamento() {
+  // Resetar estado
+  dataSelecionada = null;
+  profissionalSelecionado = null;
+  turnoSelecionado = null;
+  nomeCliente = "";
+  telefoneCliente = "";
 
-      // Validação de campos obrigatórios
-      if (!id_turno || !id_servico || !nome_cliente || !telefone_cliente) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Campos obrigatórios faltando." });
-      }
+  // Ajustar header do app para exibir o nome do serviço e botão Voltar
+  tituloHeader.innerText = servicoSelecionado.nome_servico;
+  btnVoltar.classList.remove("hidden");
+  btnVoltar.onclick = () => fecharModalAgendamento();
 
-      // 1) Verificar se o turno existe e está “livre”
-      const turnoRef = db.collection("turnos").doc(id_turno);
-      const turnoSnap = await turnoRef.get();
+  // Mostrar somente a etapa “Data”
+  mostrarEtapaModal("step-data");
 
-      if (!turnoSnap.exists) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Turno não encontrado." });
-      }
+  // Renderizar calendário na etapa “Data”
+  iniciarCalendarioModal();
 
-      const turnoData = turnoSnap.data();
-      if (turnoData.status !== "livre") {
-        return res
-          .status(400)
-          .json({ success: false, message: "Turno indisponível." });
-      }
+  // Exibir modal
+  modalAgendamento.classList.remove("hidden");
+}
 
-      // 2) Marcar turno como “reservado”
-      await turnoRef.update({ status: "reservado" });
+// =================================================================================
+// 6) FECHAR MODAL DE AGENDAMENTO
+// =================================================================================
+function fecharModalAgendamento() {
+  modalAgendamento.classList.add("hidden");
+  btnVoltar.classList.add("hidden");
+  tituloHeader.innerText = "barbear.ai";
+}
 
-      // 3) Buscar dados de serviço e profissional
-      const servicoSnap = await db.collection("servicos").doc(id_servico).get();
-      if (!servicoSnap.exists) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Serviço não encontrado." });
-      }
-      const servicoData = servicoSnap.data();
+// =================================================================================
+// 7) NAVEGAÇÃO ENTRE ETAPAS DO MODAL
+//    - mostrarEtapaModal("step-data"|"step-profissional"|"step-horario"|"step-dados")
+// =================================================================================
+function mostrarEtapaModal(etapaId) {
+  [stepData, stepProfissional, stepHorario, stepDados].forEach((sec) => {
+    if (sec.id === etapaId) sec.classList.add("active");
+    else sec.classList.remove("active");
+  });
 
-      const profSnap = await db
-        .collection("profissionais")
-        .doc(turnoData.id_profissional)
-        .get();
-      if (!profSnap.exists) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Profissional não encontrado." });
-      }
-      const profData = profSnap.data();
+  // Configurar botões Voltar / Próximo
+  if (etapaId === "step-data") {
+    btnVoltarModal.classList.add("hidden");
+    btnAvancarModal.innerText = "Próximo";
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+  } else {
+    btnVoltarModal.classList.remove("hidden");
+    // Se for etapa “Horário”, o texto continua “Próximo”
+    // Se for etapa “Dados”, o texto passa a “Confirmar”
+    btnAvancarModal.innerText =
+      etapaId === "step-horario"
+        ? "Próximo"
+        : etapaId === "step-dados"
+        ? "Confirmar"
+        : "Próximo";
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+  }
+}
 
-      // 4) Montar texto e link para WhatsApp
-      //    Exemplo de texto (cada quebra de linha virará %0A no encodeURI):
-      //    Olá, gostaria de confirmar meu agendamento:
-      //    Serviço: [NOME_SERVIÇO]
-      //    Profissional: [NOME_PROFISSIONAL]
-      //    Data: [DD/MM/YYYY] – [HH:MM]
-      //    Nome: [NOME_CLIENTE]
-      //    Telefone: [TELEFONE_CLIENTE]
-      const [yyyy, mm, dd] = turnoData.data.split("-");
-      const dataFormatada = `${dd}/${mm}/${yyyy}`;
-      const horaFormatada = turnoData.hora;
+// =================================================================================
+// 8) CALENDÁRIO NO MODAL (etapa “Data”)
+// =================================================================================
+let mesAtualModal = new Date().getMonth();
+let anoAtualModal = new Date().getFullYear();
 
-      const texto =
-        `Olá, gostaria de confirmar meu agendamento:\n` +
-        `Serviço: ${servicoData.nome_servico}\n` +
-        `Profissional: ${profData.nome_profissional}\n` +
-        `Data: ${dataFormatada} – ${horaFormatada}\n` +
-        `Nome: ${nome_cliente}\n` +
-        `Telefone: ${telefone_cliente}`;
+function iniciarCalendarioModal() {
+  renderizarCalendarioModal();
+  prevMesModal.onclick = () => {
+    if (mesAtualModal > 0) mesAtualModal--;
+    else {
+      mesAtualModal = 11;
+      anoAtualModal--;
+    }
+    renderizarCalendarioModal();
+  };
+  nextMesModal.onclick = () => {
+    if (mesAtualModal < 11) mesAtualModal++;
+    else {
+      mesAtualModal = 0;
+      anoAtualModal++;
+    }
+    renderizarCalendarioModal();
+  };
+}
 
-      const telSemSinais = telefone_cliente.replace(/\D/g, "");
-      const link_whatsapp = `https://wa.me/55${telSemSinais}?text=${encodeURIComponent(
-        texto
-      )}`;
+function renderizarCalendarioModal() {
+  mesAnoModal.innerText = obterMesAnoModal();
+  gridDiasModal.innerHTML = "";
 
-      // 5) Gravar documento em “agendamentos”
-      await db.collection("agendamentos").add({
-        id_turno,
-        id_servico,
-        nome_cliente,
-        telefone_cliente: telSemSinais,
-        link_whatsapp,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  const primeiroDia = new Date(anoAtualModal, mesAtualModal, 1).getDay();
+  const totalDias = new Date(anoAtualModal, mesAtualModal + 1, 0).getDate();
+  const hoje = new Date();
+
+  // 8.1) Preencher “espaços vazios” antes do dia 1
+  for (let i = 0; i < primeiroDia; i++) {
+    const vazio = document.createElement("div");
+    vazio.classList.add("dia-calendario", "disabled");
+    gridDiasModal.appendChild(vazio);
+  }
+
+  // 8.2) Preencher cada dia do mês
+  for (let dia = 1; dia <= totalDias; dia++) {
+    const cel = document.createElement("div");
+    const dtCompare = new Date(anoAtualModal, mesAtualModal, dia);
+    cel.innerText = dia;
+
+    if (
+      dtCompare <
+      new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
+    ) {
+      // dias já passados → disabled
+      cel.classList.add("dia-calendario", "disabled");
+    } else {
+      cel.classList.add("dia-calendario", "available");
+      cel.addEventListener("click", () => {
+        document
+          .querySelectorAll(".dia-calendario.available")
+          .forEach((d) => d.classList.remove("selected"));
+        cel.classList.add("selected");
+
+        const dd = String(dia).padStart(2, "0");
+        const mm = String(mesAtualModal + 1).padStart(2, "0");
+        dataSelecionada = `${anoAtualModal}-${mm}-${dd}`;
+
+        // Habilita botão Próximo
+        btnAvancarModal.classList.remove("disabled");
+        btnAvancarModal.disabled = false;
+      });
+    }
+    gridDiasModal.appendChild(cel);
+  }
+}
+
+function obterMesAnoModal() {
+  const meses = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
+  return `${meses[mesAtualModal]} ${anoAtualModal}`;
+}
+
+// =================================================================================
+// 9) CARREGAR LISTA DE PROFISSIONAIS (etapa “Profissional”)
+//    - Filtra por serviçoSelecionado.id_servico
+// =================================================================================
+function carregarProfissionaisModal() {
+  listaProfissionaisModal.innerHTML = "";
+  const profsFiltrados = listaProfissionais.filter((p) =>
+    Array.isArray(p.servicos_disponiveis) &&
+    p.servicos_disponiveis.includes(servicoSelecionado.id_servico)
+  );
+
+  if (profsFiltrados.length === 0) {
+    listaProfissionaisModal.innerHTML = `
+      <p style="text-align:center;color:var(--cor-textoSec);">
+        Nenhum profissional disponível para este serviço.
+      </p>`;
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+    return;
+  }
+
+  profsFiltrados.forEach((p) => {
+    const item = document.createElement("div");
+    item.classList.add("item-profissional");
+    item.dataset.id = p.id_profissional;
+
+    item.innerHTML = `
+      <img class="avatar" src="${
+        p.foto_url || "https://via.placeholder.com/48"
+      }" alt="${p.nome_profissional}" />
+      <div class="info-prof">
+        <h4>${p.nome_profissional}</h4>
+        <p>Especialista em …</p>
+      </div>
+    `;
+
+    item.addEventListener("click", () => {
+      // Remove seleção anterior
+      document
+        .querySelectorAll(".item-profissional")
+        .forEach((el) => el.classList.remove("selected"));
+      item.classList.add("selected");
+      profissionalSelecionado = p;
+
+      // Habilita botão Próximo
+      btnAvancarModal.classList.remove("disabled");
+      btnAvancarModal.disabled = false;
+    });
+
+    listaProfissionaisModal.appendChild(item);
+  });
+}
+
+// =================================================================================
+// 10) CARREGAR HORÁRIOS DO SERVIÇO (etapa “Horário”)
+//    - Chama getTurnos?data=<dataSelecionada> e filtra localmente por
+//      profissionalSelecionado.id_profissional
+// =================================================================================
+async function carregarHorariosModal() {
+  listaHorariosModal.innerHTML = "";
+  try {
+    const resp = await fetch(`${API_BASE}/getTurnos?data=${dataSelecionada}`);
+    if (!resp.ok) throw new Error("Erro ao buscar turnos");
+    const todosTurnos = await resp.json();
+
+    listaTurnos = todosTurnos.filter(
+      (t) => t.id_profissional === profissionalSelecionado.id_profissional
+    );
+
+    if (listaTurnos.length === 0) {
+      listaHorariosModal.innerHTML = `
+        <p style="text-align:center;color:var(--cor-textoSec);">
+          Sem horários disponíveis.
+        </p>`;
+      btnAvancarModal.classList.add("disabled");
+      btnAvancarModal.disabled = true;
+      return;
+    }
+
+    listaTurnos.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.classList.add("btn-horario", "available");
+      btn.dataset.id = t.id_turno;
+      btn.innerText = t.hora;
+
+      btn.addEventListener("click", () => {
+        document
+          .querySelectorAll(".btn-horario")
+          .forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        turnoSelecionado = t;
+
+        btnAvancarModal.classList.remove("disabled");
+        btnAvancarModal.disabled = false;
       });
 
-      // 6) Retorna sucesso + link
-      return res.status(200).json({ success: true, link_whatsapp });
-    } catch (erro) {
-      logger.error("Erro em postAgendar:", erro);
-      return res
-        .status(500)
-        .json({ success: false, message: "Erro interno ao agendar." });
-    }
-  });
+      listaHorariosModal.appendChild(btn);
+    });
+  } catch (err) {
+    console.error("Erro carregarHorariosModal:", err);
+    listaHorariosModal.innerHTML = `
+      <p style="text-align:center;color:var(--cor-error);">
+        Não foi possível carregar horários. Tente novamente.
+      </p>`;
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+  }
+}
+
+// =================================================================================
+// 11) PRÓXIMO / VOLTAR DENTRO DO MODAL
+//    - btnAvancarModal executa ação conforme etapa
+//    - btnVoltarModal volta para a etapa anterior
+// =================================================================================
+btnAvancarModal.addEventListener("click", () => {
+  // Se estiver em “step-data”
+  if (stepData.classList.contains("active")) {
+    mostrarEtapaModal("step-profissional");
+    carregarProfissionaisModal();
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+    return;
+  }
+
+  // Se estiver em “step-profissional”
+  if (stepProfissional.classList.contains("active")) {
+    mostrarEtapaModal("step-horario");
+    carregarHorariosModal();
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+    return;
+  }
+
+  // Se estiver em “step-horario”
+  if (stepHorario.classList.contains("active")) {
+    mostrarEtapaModal("step-dados");
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+    return;
+  }
+
+  // Se estiver em “step-dados” → enviar agendamento
+  if (stepDados.classList.contains("active")) {
+    enviarAgendamentoModal();
+    return;
+  }
 });
+
+btnVoltarModal.addEventListener("click", () => {
+  if (stepProfissional.classList.contains("active")) {
+    mostrarEtapaModal("step-data");
+    return;
+  }
+  if (stepHorario.classList.contains("active")) {
+    mostrarEtapaModal("step-profissional");
+    return;
+  }
+  if (stepDados.classList.contains("active")) {
+    mostrarEtapaModal("step-horario");
+    return;
+  }
+});
+
+// =================================================================================
+// 12) VALIDAÇÕES DE DADOS DO CLIENTE (etapa “Dados”)
+// =================================================================================
+inputNomeModal.addEventListener("input", () => {
+  nomeCliente = inputNomeModal.value.trim();
+  validarCamposCliente();
+});
+
+inputTelefoneModal.addEventListener("input", () => {
+  telefoneCliente = inputTelefoneModal.value.replace(/\D/g, "");
+  validarCamposCliente();
+});
+
+function validarCamposCliente() {
+  let valido = true;
+
+  if (nomeCliente.length < 2) {
+    erroNomeModal.style.display = "block";
+    valido = false;
+  } else {
+    erroNomeModal.style.display = "none";
+  }
+
+  if (!/^\d{10,11}$/.test(telefoneCliente)) {
+    erroTelefoneModal.style.display = "block";
+    valido = false;
+  } else {
+    erroTelefoneModal.style.display = "none";
+  }
+
+  if (valido) {
+    btnAvancarModal.classList.remove("disabled");
+    btnAvancarModal.disabled = false;
+  } else {
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+  }
+}
+
+// =================================================================================
+// 13) ENVIAR AGENDAMENTO (etapa “Dados”)
+// =================================================================================
+async function enviarAgendamentoModal() {
+  // Desabilita botão e exibe spinner
+  btnAvancarModal.disabled = true;
+  btnAvancarModal.innerHTML = `
+    <span class="spinner"
+      style="border:3px solid var(--cor-accent);
+             border-top:3px solid rgba(255,255,255,0.2);
+             width:18px;height:18px;
+             border-radius:50%;
+             display:inline-block;
+             animation:spin 1s linear infinite;">
+    </span>
+  `;
+
+  const payload = {
+    id_turno: turnoSelecionado.id_turno,
+    id_servico: servicoSelecionado.id_servico,
+    nome_cliente: nomeCliente,
+    telefone_cliente: telefoneCliente
+  };
+
+  try {
+    const resp = await fetch(`${API_BASE}/postAgendar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!resp.ok) throw new Error("Falha no agendamento");
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.message || "Erro no agendamento");
+
+    mostrarToastSucesso("Agendamento registrado! Redirecionando…");
+    setTimeout(() => {
+      window.location.href = data.link_whatsapp;
+    }, 1000);
+  } catch (err) {
+    console.error("Erro enviarAgendamentoModal:", err);
+    alert("Erro ao agendar. Tente novamente.");
+    btnAvancarModal.disabled = false;
+    btnAvancarModal.innerText = "Confirmar";
+  }
+}
+
+// =================================================================================
+// 14) TOAST DE SUCESSO (FIXO)
+// =================================================================================
+function mostrarToastSucesso(msg) {
+  const toast = document.createElement("div");
+  toast.classList.add("toast-sucesso");
+  toast.innerText = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.remove();
+  }, 2000);
+}

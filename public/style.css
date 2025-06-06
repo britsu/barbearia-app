@@ -1,48 +1,70 @@
 /*================================================================================
-  0) VARIÁVEIS DE TEMA (Dark Mode)
+  0) IMPORTAÇÃO DE FONTES
+================================================================================*/
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap');
+
+/*================================================================================
+  1) VARIÁVEIS DE TEMA (Dark Mode)
 ================================================================================*/
 :root {
   /* cores primárias */
-  --cor-bg: #121212;           /* fundo principal */
-  --cor-card: #2E2E2E;         /* fundo de cards e seções internas */
-  --cor-headerFooter: #B3B3B3; /* fundo de header / footer */
-  --cor-texto: #FFFFFF;        /* texto principal (branco) */
-  --cor-textoSec: #B3B3B3;     /* texto secundário (cinza claro) */
-  --cor-accent: #E53935;       /* cor de destaque (vermelho vibrante) */
-  --cor-error: #F44336;        /* cor de mensagem de erro */
-  --cor-borda: #424242;        /* bordas / divisores */
-  --font-principal: 'Roboto', sans-serif;
+  --cor-bg: #121212;            /* fundo principal */
+  --cor-card: #1F1F1F;          /* fundo de cards e seções internas */
+  --cor-headerFooter: #2E2E2E;  /* fundo de header */
+  --cor-texto: #FFFFFF;         /* texto principal */
+  --cor-textoSec: #B3B3B3;      /* texto secundário */
+  --cor-accent: #E53935;        /* cor de destaque (vermelho) */
+  --cor-borda: #424242;         /* bordas / divisores */
+  --cor-overlay: rgba(0, 0, 0, 0.6); /* fundo semitransparente para modais */
+  --cor-error: #FF5252;         /* para mensagens de erro */
+
+  /* tipografia */
+  --font-poppins: 'Poppins', sans-serif;
+  --font-montserrat: 'Montserrat', sans-serif;
+
+  /* espaçamentos */
+  --padding-lateral: 16px;
+  --radius-card: 12px;
+  --radius-button: 24px;
 }
 
 /*================================================================================
-  1) RESET E TIPOGRAFIA BÁSICA
+  2) RESET E TIPOGRAFIA BÁSICA
 ================================================================================*/
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
-html, body {
+
+html,
+body {
   width: 100%;
   height: 100%;
   background-color: var(--cor-bg);
   color: var(--cor-texto);
-  font-family: var(--font-principal);
+  font-family: var(--font-poppins);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
-button, input, select {
-  font-family: var(--font-principal);
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-poppins);
   outline: none;
   border: none;
   background: none;
   color: inherit;
 }
+
 .hidden {
   display: none !important;
 }
 
 /*================================================================================
-  2) HEADER FIXO
+  3) HEADER FIXO
 ================================================================================*/
 #appHeader {
   position: sticky;
@@ -52,131 +74,144 @@ button, input, select {
   background-color: var(--cor-headerFooter);
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  padding: 0 var(--padding-lateral);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   z-index: 100;
 }
+
 #btnVoltar {
-  font-size: 18px;
-  font-weight: 500;
-  color: #2E2E2E;
+  font-size: 20px;
+  color: var(--cor-textoSec);
+  cursor: pointer;
+  background: none;
 }
-#btnVoltar.hidden {
-  display: none;
-}
+
 #tituloHeader {
   flex: 1;
   text-align: center;
-  font-size: 18px;
+  font-family: var(--font-montserrat);
+  font-size: 20px;
   font-weight: 600;
-  color: #2E2E2E;
+  color: var(--cor-texto);
 }
-#spacerHeader {
-  width: 24px; /* espaço vazio para alinhar central */
+
+#btnPerfil {
+  background: none;
+  cursor: pointer;
 }
 
 /*================================================================================
-  3) FOOTER FIXO
+  4) CONTEÚDO PRINCIPAL (MAIN)
 ================================================================================*/
-#appFooter {
-  position: fixed;
-  bottom: 0;
+#appMain {
   width: 100%;
-  background-color: var(--cor-headerFooter);
-  padding: 8px 16px;
-  box-shadow: 0 -2px 6px rgba(0,0,0,0.3);
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--padding-lateral) 0;
 }
-#btnAcaoFooter {
-  width: 100%;
-  height: 52px;
+
+/*================================================================================
+  5) HERO SECTION
+================================================================================*/
+.hero-container {
+  background-color: var(--cor-bg);
+  text-align: center;
+  padding: 40px var(--padding-lateral);
+}
+
+.hero-container h2 {
+  font-family: var(--font-montserrat);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--cor-texto);
+  line-height: 1.2;
+  margin-bottom: 24px;
+}
+
+/* Botão “VER SERVIÇOS” dentro da Hero */
+.btn-primary {
+  width: 90%;
+  max-width: 360px;
   background-color: var(--cor-accent);
   color: var(--cor-texto);
+  font-family: var(--font-montserrat);
   font-size: 14px;
   font-weight: 500;
   text-transform: uppercase;
-  border-radius: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border-radius: var(--radius-button);
+  padding: 14px 0;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s ease;
+  margin: 0 auto;
+  display: block;
 }
-#btnAcaoFooter:disabled {
-  background-color: var(--cor-borda);
-  color: var(--cor-textoSec);
-  cursor: default;
-}
-#btnAcaoFooter:hover:not(:disabled) {
+
+.btn-primary:hover {
   background-color: #D32F2F;
 }
 
-/* Espaço para que o <main> não fique embaixo do footer fixo */
-#appMain {
-  padding-bottom: 80px;
+/*================================================================================
+  6) SEÇÃO DE SERVIÇOS (LISTA SIMPLES)
+================================================================================*/
+.services-section {
+  margin-top: 24px; /* espaçamento após a hero */
 }
 
-/*================================================================================
-  4) ESTILO GERAL DO CONTEÚDO (MAIN)
-================================================================================*/
-#appMain {
-  width: 100%;
-  max-width: 480px; /* mobile-first: limite a 480px para boas margens */
-  margin: 0 auto;
-  padding: 16px;
+.titulo-categoria {
+  font-family: var(--font-montserrat);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--cor-texto);
+  margin: 16px 0 8px var(--padding-lateral);
 }
 
-/*================================================================================
-  5) TELA 1: CARDS DE SERVIÇOS
-================================================================================*/
-/* Container dos cards (grid responsivo) */
-#listaServicosContainer {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+/* Container de cards de cada categoria */
+.lista-cards {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+  padding: 0 var(--padding-lateral) 24px var(--padding-lateral);
 }
 
 /* Cada card de serviço */
 .card-servico {
+  position: relative;
   background-color: var(--cor-card);
-  border-radius: 12px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  border-radius: var(--radius-card);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
   padding: 16px;
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: space-between;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
   cursor: pointer;
+  height: 80px; /* altura fixa para formato mais quadrado */
 }
+
 .card-servico:hover {
   transform: scale(1.02);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.6);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
 }
-/* Ícone placeholder (ex.: imagem circular) */
-.card-servico img.iconServico {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid var(--cor-texto);
-  margin-bottom: 12px;
+
+.card-servico .texto-servico {
+  display: flex;
+  flex-direction: column;
 }
-/* Nome do serviço */
-.card-servico .texto-servico h3 {
+
+.card-servico .texto-servico h4 {
+  font-family: var(--font-montserrat);
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 4px;
   color: var(--cor-texto);
-  text-transform: uppercase;
 }
-/* Subtexto (duração e preço) */
+
 .card-servico .texto-servico p {
+  font-family: var(--font-poppins);
   font-size: 14px;
   color: var(--cor-textoSec);
-  text-align: center;
-  line-height: 1.2;
-  margin-bottom: 8px;
+  margin-top: 4px;
 }
-/* Indicador de status (bolinha vermelha) */
+
 .card-servico .indicatorserv {
   position: absolute;
   top: 12px;
@@ -188,59 +223,117 @@ button, input, select {
 }
 
 /*================================================================================
-  6) TELA 2: CALENDÁRIO + LISTA DE PROFISSIONAIS
+  7) MODAL DE AGENDAMENTO
 ================================================================================*/
-/* Container geral (calendário + lista) */
-.calendario-e-profissionais {
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
 }
 
-/* ── CALENDÁRIO ── */
-.calendario-container {
-  background-color: var(--cor-card);
-  border-radius: 12px;
-  padding: 12px;
+.modal.hidden {
+  display: none;
 }
-/* Header do calendário (mês e navegação) */
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--cor-overlay);
+}
+
+.modal-content {
+  position: relative;
+  background-color: var(--cor-card);
+  border-radius: var(--radius-card);
+  width: 90%;
+  max-width: 400px;
+  max-height: 90%;
+  overflow-y: auto;
+  padding: 24px 16px;
+  z-index: 210;
+}
+
+.modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 20px;
+  color: var(--cor-textoSec);
+  cursor: pointer;
+}
+
+/* Popup Steps */
+.popup-step {
+  display: none;
+  margin-bottom: 24px;
+}
+
+.popup-step.active {
+  display: block;
+}
+
+.popup-step h3 {
+  font-family: var(--font-montserrat);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cor-texto);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+/* Calendário dentro do modal */
+.calendario-container {
+  width: 100%;
+}
+
 .calendario-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
+
 .calendario-header button {
   background: none;
-  color: var(--cor-texto);
   font-size: 18px;
-  font-weight: 500;
+  color: var(--cor-texto);
   cursor: pointer;
 }
+
 .calendario-header h4 {
+  font-family: var(--font-montserrat);
   font-size: 14px;
   font-weight: 500;
   color: var(--cor-texto);
 }
-/* Dias da semana (labels) */
+
 .dias-semana {
   display: grid;
-  grid-template-columns: repeat(7,1fr);
+  grid-template-columns: repeat(7, 1fr);
   text-align: center;
   font-size: 12px;
   color: var(--cor-textoSec);
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
-/* Grid de dias */
+
 .grid-dias {
   display: grid;
-  grid-template-columns: repeat(7,1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 8px;
 }
-/* Cada célula de dia */
+
 .dia-calendario {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -248,168 +341,188 @@ button, input, select {
   font-size: 14px;
   cursor: pointer;
 }
+
 .dia-calendario.disabled {
   background: var(--cor-borda);
   color: #555555;
   cursor: default;
 }
+
 .dia-calendario.available {
   background: var(--cor-card);
   color: var(--cor-texto);
 }
+
 .dia-calendario.selected {
   background: var(--cor-accent);
   color: var(--cor-texto);
 }
 
-/* ── LISTA DE PROFISSIONAIS ── */
-.lista-profissionais {
-  background-color: var(--cor-card);
-  border-radius: 12px;
-  overflow: hidden;
-}
-.item-profissional {
+/* Lista de profissionais dentro do modal */
+.lista-profissionais-modal .item-profissional {
+  padding: 12px 0;
   display: flex;
   align-items: center;
-  padding: 12px 16px;
   cursor: pointer;
-  transition: background 0.2s;
 }
-.item-profissional + .item-profissional {
+
+.lista-profissionais-modal .item-profissional + .item-profissional {
   border-top: 1px solid var(--cor-borda);
 }
-.item-profissional img.avatar {
-  width: 48px;
-  height: 48px;
+
+.lista-profissionais-modal img.avatar {
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   object-fit: cover;
   margin-right: 12px;
   border: 2px solid var(--cor-texto);
 }
-.item-profissional .info-prof h4 {
+
+.lista-profissionais-modal .info-prof h4 {
+  font-family: var(--font-montserrat);
   font-size: 16px;
   font-weight: 600;
   color: var(--cor-texto);
 }
-.item-profissional .info-prof p {
+
+.lista-profissionais-modal .info-prof p {
+  font-family: var(--font-poppins);
   font-size: 14px;
   color: var(--cor-textoSec);
-  margin-top: 2px;
-}
-.item-profissional .seta-direita {
-  margin-left: auto;
-  font-size: 16px;
-  color: var(--cor-texto);
-}
-.item-profissional:hover {
-  background-color: var(--cor-accent);
 }
 
-/*================================================================================
-  7) TELA 3: PILLS DE HORÁRIO
-================================================================================*/
-.lista-horarios {
+/* Horários dentro do modal */
+.popup-horarios {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
+  margin-bottom: 24px;
 }
-.btn-horario {
+
+.popup-horarios .btn-horario {
   padding: 8px 12px;
   background: var(--cor-borda);
   color: var(--cor-textoSec);
   border-radius: 20px;
+  font-family: var(--font-poppins);
   font-size: 14px;
   cursor: pointer;
-  border: none;
   transition: background 0.2s, color 0.2s;
 }
-.btn-horario.available {
+
+.popup-horarios .btn-horario.available {
   background: var(--cor-card);
   color: var(--cor-texto);
 }
-.btn-horario.selected {
+
+.popup-horarios .btn-horario.selected {
   background: var(--cor-accent);
   color: var(--cor-texto);
 }
-.btn-horario.disabled {
+
+.popup-horarios .btn-horario.disabled {
   background: var(--cor-borda);
   color: #555555;
   cursor: default;
 }
 
-/*================================================================================
-  8) TELA 4: FORMULÁRIO DE DADOS DO CLIENTE
-================================================================================*/
-.form-cliente-container {
-  background-color: var(--cor-card);
-  border-radius: 12px;
-  padding: 16px;
-  margin-top: 16px;
-}
-.form-cliente-group {
+/* Formulário de dados do cliente no modal */
+.popup-dados-cliente .form-cliente-group {
   position: relative;
   margin-bottom: 16px;
 }
-.form-cliente-group label {
+
+.popup-dados-cliente label {
   position: absolute;
   top: -8px;
   left: 12px;
   background-color: var(--cor-card);
   padding: 0 4px;
+  font-family: var(--font-poppins);
   font-size: 14px;
   color: var(--cor-textoSec);
   transition: color 0.2s;
 }
-.form-cliente-group input {
+
+.popup-dados-cliente input {
   width: 100%;
   background-color: var(--cor-bg);
   border: 1px solid var(--cor-borda);
   border-radius: 20px;
   padding: 12px;
+  font-family: var(--font-poppins);
   font-size: 16px;
   color: var(--cor-texto);
 }
-.form-cliente-group input:focus + label {
+
+.popup-dados-cliente input:focus + label {
   color: var(--cor-texto);
 }
-.erro-msg {
+
+.popup-dados-cliente .erro-msg {
   font-size: 12px;
   color: var(--cor-error);
   margin-top: 4px;
   display: none;
 }
 
-/*================================================================================
-  9) TELA 5: TOAST DE SUCESSO / FEEDBACK
-================================================================================*/
-.toast-sucesso {
-  position: fixed;
-  top: 0;
-  width: 100%;
-  background: var(--cor-card);
-  color: var(--cor-texto);
-  height: 56px;
+/* Botões de navegação do modal */
+.modal-buttons {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  z-index: 200;
-  animation: aparecer 0.3s ease-out;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
 }
-@keyframes aparecer {
-  from { transform: translateY(-100%); }
-  to   { transform: translateY(0); }
+
+.btn-secondary {
+  flex: 1;
+  background-color: var(--cor-borda);
+  color: var(--cor-textoSec);
+  font-family: var(--font-montserrat);
+  font-size: 14px;
+  font-weight: 500;
+  text-transform: uppercase;
+  border-radius: var(--radius-button);
+  padding: 12px 0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background-color: #5C5C5C;
+}
+
+.btn-primary.disabled,
+.btn-secondary.disabled {
+  background-color: var(--cor-borda);
+  color: var(--cor-textoSec);
+  cursor: default;
 }
 
 /*================================================================================
-  10) ESPAÇAMENTO BASE / RESPONSIVIDADE
+  8) RESPONSIVIDADE (MOBILE-FIRST)
 ================================================================================*/
 @media (max-width: 480px) {
-  .dia-calendario, .btn-horario {
-    width: 36px; height: 36px; font-size: 12px;
+  /* Ajustes de tamanhos de botões e elementos touch */
+  .dia-calendario,
+  .btn-horario {
+    width: 36px;
+    height: 36px;
+    font-size: 12px;
   }
-  header h1 { font-size: 1.6rem; }
-  #appMain { padding: 12px; }
-  .card-servico { padding: 12px; }
+  .modal-content {
+    width: 95%;
+  }
+  .card-servico {
+    padding: 12px;
+    height: 72px;
+  }
+  .hero-container h2 {
+    font-size: 20px;
+  }
+  .btn-primary {
+    font-size: 12px;
+    padding: 10px 0;
+  }
 }

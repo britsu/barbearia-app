@@ -5,14 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>barbear.ai – Agendamento Online</title>
 
-  <!-- 1) Link para o novo style.css -->
+  <!-- ===========================
+       Google Fonts: Poppins & Montserrat
+  =========================== -->
+  <link
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- ===========================
+       Link para o style.css
+  =========================== -->
   <link rel="stylesheet" href="style.css" />
 
-  <!-- 2) SDKs do Firebase (compat) – mantidos antes do script.js -->
+  <!-- ===========================
+       SDKs do Firebase (compat)
+  =========================== -->
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- 3) Inicialização do Firebase (atribua seu firebaseConfig real) -->
+  <!-- ===========================
+       Inicialização do Firebase (insira seu firebaseConfig real)
+  =========================== -->
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyBFktkGF1JdVNUpiK7n4nzko5a45n4cEDQ",
@@ -24,35 +38,102 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-    // opcional: console.log("Firebase iniciado:", db.app.options.projectId);
   </script>
 </head>
+
 <body>
   <!-- ═════════════════════════════════════╗
        HEADER FIXO EM CIMA
   ═════════════════════════════════════╝ -->
   <header id="appHeader">
-    <button id="btnVoltar" class="hidden">← Voltar</button>
-    <h1 id="tituloHeader">barbear.ai</h1>
-    <div id="spacerHeader"></div>
+    <button id="btnVoltar" class="hidden">
+      ← Voltar
+    </button>
+    <h1 id="tituloHeader">
+      <span class="logo-text">barbear</span><span class="logo-accent">.ai</span>
+    </h1>
+    <button id="btnPerfil">
+      <!-- Ícone de perfil simples -->
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="#2E2E2E" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" stroke="none" />
+      </svg>
+    </button>
   </header>
 
   <!-- ═════════════════════════════════════╗
-       CONTEÚDO DINÂMICO (renderizado pelo JS)
+       CONTEÚDO PRINCIPAL (INJETADO PELO script.js)
   ═════════════════════════════════════╝ -->
   <main id="appMain">
-    <!-- Ao iniciar, o script.js vai injetar
-         a tela “Selecionar serviço”. -->
+    <!-- Todo o conteúdo será injetado dinamicamente -->
   </main>
 
   <!-- ═════════════════════════════════════╗
-       FOOTER FIXO COM BOTÃO “PRÓXIMO/CONFIRMAR”
+       POPUP / MODAL DE AGENDAMENTO
   ═════════════════════════════════════╝ -->
-  <footer id="appFooter">
-    <button id="btnAcaoFooter" disabled>Próximo</button>
-  </footer>
+  <div id="modalAgendamento" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <button id="btnFecharModal" class="modal-close">×</button>
 
-  <!-- 4) Script principal (lógica de UI/UX + Firebase) -->
-  <script src="script.js"></script>
+      <!-- Etapa 1: Selecionar Data -->
+      <div class="popup-step" id="step-data">
+        <h3>Selecione a Data</h3>
+        <div class="calendario-container">
+          <div class="calendario-header">
+            <button id="prevMesModal">‹</button>
+            <h4 id="mesAnoModal"></h4>
+            <button id="nextMesModal">›</button>
+          </div>
+          <div class="dias-semana">
+            <div>Dom</div><div>Seg</div><div>Ter</div>
+            <div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+          </div>
+          <div class="grid-dias" id="gridDiasModal"></div>
+        </div>
+      </div>
+
+      <!-- Etapa 2: Selecionar Profissional -->
+      <div class="popup-step" id="step-profissional">
+        <h3>Selecione o Profissional</h3>
+        <div class="lista-profissionais-modal" id="listaProfissionaisModal"></div>
+      </div>
+
+      <!-- Etapa 3: Selecionar Horário -->
+      <div class="popup-step" id="step-horario">
+        <h3>Escolha o Horário</h3>
+        <div class="popup-horarios" id="listaHorariosModal"></div>
+      </div>
+
+      <!-- Etapa 4: Dados do Cliente -->
+      <div class="popup-step" id="step-dados">
+        <h3>Seus Dados</h3>
+        <div class="popup-dados-cliente">
+          <div class="form-cliente-group">
+            <input type="text" id="inputNomeModal" />
+            <label for="inputNomeModal">Nome completo</label>
+            <div class="erro-msg" id="erroNomeModal">Nome obrigatório</div>
+          </div>
+          <div class="form-cliente-group">
+            <input type="tel" id="inputTelefoneModal" />
+            <label for="inputTelefoneModal">WhatsApp (somente números)</label>
+            <div class="erro-msg" id="erroTelefoneModal">Telefone inválido</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botões de Navegação do Modal -->
+      <div class="modal-buttons">
+        <button id="btnVoltarModal" class="btn-secondary hidden">Voltar</button>
+        <button id="btnAvancarModal" class="btn-primary disabled" disabled>
+          Próximo
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===========================
+       Script principal (lógica de UI/UX + Firebase)
+  =========================== -->
+  <script src="script.js" defer></script>
 </body>
 </html>

@@ -1,3 +1,5 @@
+// public/script.js
+
 // =================================================================================
 // 1) VARIÁVEIS GLOBAIS E ESTADO DO AGENDAMENTO
 // =================================================================================
@@ -7,32 +9,67 @@ let listaServicos = [];
 let listaProfissionais = [];
 let listaTurnos = [];
 
-const estado = {
-  etapa: 1,
-  servicoSelecionado: null,
-  dataSelecionada: null,
-  profissionalSelecionado: null,
-  turnoSelecionado: null,
-  nomeCliente: "",
-  telefoneCliente: ""
-};
+// Estado global “lightweight”
+let servicoSelecionado = null;
+let dataSelecionada = null;
+let profissionalSelecionado = null;
+let turnoSelecionado = null;
+let nomeCliente = "";
+let telefoneCliente = "";
 
-const btnVoltar = document.getElementById("btnVoltar");
-const tituloHeader = document.getElementById("tituloHeader");
-const appMain = document.getElementById("appMain");
-const btnAcaoFooter = document.getElementById("btnAcaoFooter");
+// Referências DOM
+const btnVoltar      = document.getElementById("btnVoltar");
+const tituloHeader   = document.getElementById("tituloHeader");
+const appMain        = document.getElementById("appMain");
+
+// Modal (etapas)
+const modalAgendamento    = document.getElementById("modalAgendamento");
+const btnFecharModal      = document.getElementById("btnFecharModal");
+const btnVoltarModal      = document.getElementById("btnVoltarModal");
+const btnAvancarModal     = document.getElementById("btnAvancarModal");
+
+const stepData            = document.getElementById("step-data");
+const stepProfissional    = document.getElementById("step-profissional");
+const stepHorario         = document.getElementById("step-horario");
+const stepDados           = document.getElementById("step-dados");
+
+// Calendário no modal
+const mesAnoModal         = document.getElementById("mesAnoModal");
+const gridDiasModal       = document.getElementById("gridDiasModal");
+const prevMesModal        = document.getElementById("prevMesModal");
+const nextMesModal        = document.getElementById("nextMesModal");
+
+// Listas dentro do modal
+const listaProfissionaisModal = document.getElementById("listaProfissionaisModal");
+const listaHorariosModal      = document.getElementById("listaHorariosModal");
+
+// Dados do cliente
+const inputNomeModal       = document.getElementById("inputNomeModal");
+const inputTelefoneModal   = document.getElementById("inputTelefoneModal");
+const erroNomeModal        = document.getElementById("erroNomeModal");
+const erroTelefoneModal    = document.getElementById("erroTelefoneModal");
 
 // =================================================================================
-// 2) AO CARREGAR PÁGINA: BUSCAR DADOS E MONTAR TELA 1
+// 2) AO CARREGAR A PÁGINA: BUSCAR DADOS E MONTAR A TELA PRINCIPAL
 // =================================================================================
 document.addEventListener("DOMContentLoaded", async () => {
+  console.log("DOM carregado; iniciando fetch de serviços e profissionais...");
   await carregarServicos();
+  console.log("SERVIÇOS CARREGADOS (console.log abaixo):");
+  console.log(listaServicos);
+
   await carregarProfissionais();
-  montarTelaServicos();
+  console.log("PROFISSIONAIS CARREGADOS:");
+  console.log(listaProfissionais);
+
+  montarTelaPrincipal();
+
+  // Depois que o DOM principal foi montado, garantimos que o botão “X” feche o modal:
+  btnFecharModal.addEventListener("click", fecharModalAgendamento);
 });
 
 // =================================================================================
-// 3) FUNÇÕES DE BUSCA (SERVIÇOS E PROFISSIONAIS)
+// 3) BUSCAR DADOS DO FIRESTORE (via Cloud Functions)
 // =================================================================================
 async function carregarServicos() {
   try {
@@ -55,139 +92,233 @@ async function carregarProfissionais() {
     listaProfissionais = await resp.json();
   } catch (err) {
     console.error("Erro carregarProfissionais:", err);
+    listaProfissionais = [];
   }
 }
 
 // =================================================================================
-// 4) TELA 1: MONTAR CARDS DE SERVIÇOS
+// 4) MONTAR TELA PRINCIPAL: HERO + LISTA SIMPLES DE SERVIÇOS
 // =================================================================================
-function montarTelaServicos() {
-  estado.etapa = 1;
-  btnVoltar.classList.add("hidden");
-  tituloHeader.innerText = "Selecione seu serviço";
-  btnAcaoFooter.disabled = true;
-  btnAcaoFooter.innerText = "Próximo";
+function montarTelaPrincipal() {
+  appMain.innerHTML = "";
 
-  appMain.innerHTML = `
-    <section id="secServicos">
-      <h2>Serviços Disponíveis</h2>
-      <div id="listaServicosContainer">
-        ${listaServicos
-          .map((serv) => {
-            // Garante que 'preco' seja um número antes de chamar toFixed
-            const precoNumerico = Number(serv.preco);
-            const precoFmt = isNaN(precoNumerico) ? "0.00" : precoNumerico.toFixed(2);
-            // Garante que 'duracao_min' seja exibido corretamente (caso venha como string)
-            const duracaoFmt = Number(serv.duracao_min) || 0;
-            return `
-          <div class="card-servico" data-id="${serv.id_servico}">
-            <img class="iconServico" src="https://via.placeholder.com/48" alt="${serv.nome_servico}" />
-            <div class="texto-servico">
-              <h3>${serv.nome_servico}</h3>
-              <p>${duracaoFmt} min • R$ ${precoFmt}</p>
-            </div>
-            <div class="indicatorserv"></div>
-          </div>
-        `;
-          })
-          .join("")}
+  // 4.1) Hero
+  const heroHTML = `
+    <section class="hero-container">
+      <h2>Agende seu horário em segundos</h2>
+      <button id="btnVerServicos" class="btn-primary">VER SERVIÇOS</button>
+    </section>
+  `;
+  appMain.insertAdjacentHTML("beforeend", heroHTML);
+
+  document.getElementById("btnVerServicos").addEventListener("click", () => {
+    const sec = document.querySelector("#servicosSection");
+    if (sec) sec.scrollIntoView({ behavior: "smooth" });
+  });
+
+  // 4.2) Seção de serviços (cria containers fixos)
+  let servicosHTML = `
+    <section id="servicosSection" class="services-section">
+      <div class="container">
+        <h3 class="titulo-categoria">Cortes</h3>
+        <div class="lista-cards" id="cardsCorte"></div>
+
+        <h3 class="titulo-categoria">Barbas</h3>
+        <div class="lista-cards" id="cardsBarba"></div>
+
+        <h3 class="titulo-categoria">Combos</h3>
+        <div class="lista-cards" id="cardsCombos"></div>
       </div>
     </section>
   `;
+  appMain.insertAdjacentHTML("beforeend", servicosHTML);
 
+  // 4.3) Para cada item em listaServicos, infere categoria via id_servico
+  listaServicos.forEach((serv) => {
+    const idRaw = (serv.id_servico || "").toString().toLowerCase();
+    let cat = "outros";
+    if (idRaw.includes("corte")) {
+      cat = "corte";
+    } else if (idRaw.includes("barba")) {
+      cat = "barba";
+    } else if (idRaw.includes("combo")) {
+      cat = "combos";
+    }
+
+    const containerId = "cards" + cat.charAt(0).toUpperCase() + cat.slice(1);
+    const container = document.getElementById(containerId);
+    if (!container) {
+      console.warn(
+        `Serviço "${serv.id_servico}" não se encaixa em corte/barba/combos (idRaw="${idRaw}"). Ignorando.`
+      );
+      return;
+    }
+
+    const precoNum = Number(serv.preco);
+    const precoFmt = isNaN(precoNum) ? "0.00" : precoNum.toFixed(2);
+    const duracaoNum = Number(serv.duracao_min) || 0;
+
+    const cardHTML = `
+      <div class="card-servico" data-id="${serv.id_servico}" data-categoria="${cat}">
+        <div class="texto-servico">
+          <h4 class="titulo-servico">${serv.nome_servico}</h4>
+          <p class="info-servico">${duracaoNum} min • R$ ${precoFmt}</p>
+        </div>
+        <div class="indicatorserv"></div>
+      </div>
+    `;
+    container.insertAdjacentHTML("beforeend", cardHTML);
+  });
+
+  // 4.4) Adiciona listener em cada .card-servico
   document.querySelectorAll(".card-servico").forEach((card) => {
     card.addEventListener("click", () => {
       const id = card.dataset.id;
-      estado.servicoSelecionado = listaServicos.find((s) => s.id_servico === id);
-      montarTelaDataProfissional();
+      servicoSelecionado = listaServicos.find((s) => s.id_servico === id);
+      console.log("→ Clicou no card, servicoSelecionado =", servicoSelecionado);
+      abrirModalAgendamento();
     });
   });
 }
 
 // =================================================================================
-// 5) TELA 2: SELEÇÃO DE DATA E PROFISSIONAL
+// 5) ABRIR MODAL DE AGENDAMENTO (DEFINIR PASSO “step-data”)
 // =================================================================================
-async function montarTelaDataProfissional() {
-  estado.etapa = 2;
-  estado.dataSelecionada = null;
-  estado.profissionalSelecionado = null;
+function abrirModalAgendamento() {
+  dataSelecionada = null;
+  profissionalSelecionado = null;
+  turnoSelecionado = null;
+  nomeCliente = "";
+  telefoneCliente = "";
+
+  console.log("→ abrirModalAgendamento() chamado; serviço:", servicoSelecionado);
+  tituloHeader.innerText = servicoSelecionado.nome_servico;
   btnVoltar.classList.remove("hidden");
-  btnVoltar.onclick = () => montarTelaServicos();
-  tituloHeader.innerText = "Data e Profissional";
+  btnVoltar.onclick = () => fecharModalAgendamento();
 
-  appMain.innerHTML = `
-    <div class="calendario-e-profissionais">
-      <div class="calendario-container">
-        <div class="calendario-header">
-          <button id="prevMes">&lt;</button>
-          <h4 id="mesAno"></h4>
-          <button id="nextMes">&gt;</button>
-        </div>
-        <div class="dias-semana">
-          <div>Dom</div><div>Seg</div><div>Ter</div>
-          <div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
-        </div>
-        <div class="grid-dias" id="gridDias"></div>
-      </div>
-      <div class="lista-profissionais" id="listaProfissionaisContainer"></div>
-    </div>
-  `;
+  console.log("→ mostrarEtapaModal('step-data')");
+  mostrarEtapaModal("step-data");
 
-  montarCalendario();
+  console.log("→ iniciarCalendarioModal()");
+  iniciarCalendarioModal();
 
-  const servID = estado.servicoSelecionado.id_servico;
-  const profsFiltrados = listaProfissionais.filter((p) =>
-    Array.isArray(p.servicos_disponiveis) && p.servicos_disponiveis.includes(servID)
-  );
-  const listaDiv = document.getElementById("listaProfissionaisContainer");
-
-  if (profsFiltrados.length === 0) {
-    listaDiv.innerHTML = `
-      <p style="text-align:center;color:var(--cor-textoSec);margin:16px;">
-        Nenhum profissional atende esse serviço.
-      </p>`;
-  } else {
-    listaDiv.innerHTML = profsFiltrados
-      .map(
-        (p) => `
-      <div class="item-profissional" data-id="${p.id_profissional}">
-        <img class="avatar" src="${p.foto_url || "https://via.placeholder.com/48"}" alt="${p.nome_profissional}" />
-        <div class="info-prof">
-          <h4>${p.nome_profissional}</h4>
-          <p>Especialista em …</p>
-        </div>
-        <div class="seta-direita">›</div>
-      </div>
-    `
-      )
-      .join("");
-
-    document.querySelectorAll(".item-profissional").forEach((item) => {
-      item.addEventListener("click", () => {
-        const idP = item.dataset.id;
-        estado.profissionalSelecionado = profsFiltrados.find((x) => x.id_profissional === idP);
-        // Se a data já estiver selecionada, podemos avançar automaticamente:
-        if (estado.dataSelecionada) {
-          montarTelaHorarios();
-        } else {
-          // Caso contrário, aguardamos o clique no calendário + ativamos o botão
-          atualizarFooter(false);
-        }
-      });
-    });
-  }
-
-  // Inicialmente, desabilita o botão “Próximo”
-  atualizarFooter(false);
+  console.log("→ exibindo modal");
+  modalAgendamento.classList.remove("hidden");
 }
 
 // =================================================================================
-// 6) FUNÇÕES DO CALENDÁRIO
+// 6) FECHAR MODAL
 // =================================================================================
-let mesAtual = new Date().getMonth();
-let anoAtual = new Date().getFullYear();
+function fecharModalAgendamento() {
+  modalAgendamento.classList.add("hidden");
+  btnVoltar.classList.add("hidden");
+  tituloHeader.innerText = "barbear.ai";
+}
 
-function obterMesAno() {
+// =================================================================================
+// 7) MOSTRAR APENAS A ETAPA CORRETA (step-data | step-profissional | step-horario | step-dados)
+// =================================================================================
+function mostrarEtapaModal(etapaId) {
+  // Remove .active de todas, adiciona somente ao passo correspondente
+  [stepData, stepProfissional, stepHorario, stepDados].forEach((sec) => {
+    if (sec.id === etapaId) sec.classList.add("active");
+    else sec.classList.remove("active");
+  });
+
+  if (etapaId === "step-data") {
+    btnVoltarModal.classList.add("hidden");
+    btnAvancarModal.innerText = "Próximo";
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+  } else {
+    btnVoltarModal.classList.remove("hidden");
+    btnAvancarModal.innerText =
+      etapaId === "step-horario"
+        ? "Próximo"
+        : etapaId === "step-dados"
+        ? "Confirmar"
+        : "Próximo";
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+  }
+}
+
+// =================================================================================
+// 8) CALENDÁRIO NO MODAL (PASSO “step-data”)
+// =================================================================================
+let mesAtualModal = new Date().getMonth();
+let anoAtualModal = new Date().getFullYear();
+
+function iniciarCalendarioModal() {
+  renderizarCalendarioModal();
+  prevMesModal.onclick = () => {
+    if (mesAtualModal > 0) mesAtualModal--;
+    else {
+      mesAtualModal = 11;
+      anoAtualModal--;
+    }
+    renderizarCalendarioModal();
+  };
+  nextMesModal.onclick = () => {
+    if (mesAtualModal < 11) mesAtualModal++;
+    else {
+      mesAtualModal = 0;
+      anoAtualModal++;
+    }
+    renderizarCalendarioModal();
+  };
+}
+
+function renderizarCalendarioModal() {
+  mesAnoModal.innerText = obterMesAnoModal();
+  gridDiasModal.innerHTML = "";
+
+  const primeiroDia = new Date(anoAtualModal, mesAtualModal, 1).getDay();
+  const totalDias = new Date(anoAtualModal, mesAtualModal + 1, 0).getDate();
+  const hoje = new Date();
+
+  // 8.1) Preencher “espaços vazios”
+  for (let i = 0; i < primeiroDia; i++) {
+    const vazio = document.createElement("div");
+    vazio.classList.add("dia-calendario", "disabled");
+    gridDiasModal.appendChild(vazio);
+  }
+
+  // 8.2) Preencher cada dia do mês
+  for (let dia = 1; dia <= totalDias; dia++) {
+    const cel = document.createElement("div");
+    const dtCompare = new Date(anoAtualModal, mesAtualModal, dia);
+    cel.innerText = dia;
+
+    if (
+      dtCompare <
+      new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
+    ) {
+      // dias passados → disabled
+      cel.classList.add("dia-calendario", "disabled");
+    } else {
+      cel.classList.add("dia-calendario", "available");
+      cel.addEventListener("click", () => {
+        document
+          .querySelectorAll(".dia-calendario.available")
+          .forEach((d) => d.classList.remove("selected"));
+        cel.classList.add("selected");
+
+        const dd = String(dia).padStart(2, "0");
+        const mm = String(mesAtualModal + 1).padStart(2, "0");
+        dataSelecionada = `${anoAtualModal}-${mm}-${dd}`;
+        console.log("→ Data selecionada:", dataSelecionada);
+
+        // Habilita “Próximo”
+        btnAvancarModal.classList.remove("disabled");
+        btnAvancarModal.disabled = false;
+      });
+    }
+    gridDiasModal.appendChild(cel);
+  }
+}
+
+function obterMesAnoModal() {
   const meses = [
     "Janeiro",
     "Fevereiro",
@@ -202,228 +333,232 @@ function obterMesAno() {
     "Novembro",
     "Dezembro",
   ];
-  return `${meses[mesAtual]} ${anoAtual}`;
-}
-
-function montarCalendario() {
-  const grid = document.getElementById("gridDias");
-  const mesAnoLabel = document.getElementById("mesAno");
-  grid.innerHTML = "";
-  mesAnoLabel.innerText = obterMesAno();
-
-  const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
-  const totalDias = new Date(anoAtual, mesAtual + 1, 0).getDate();
-
-  // Preenche os “espaços vazios” antes do dia 1
-  for (let i = 0; i < primeiroDia; i++) {
-    const vazio = document.createElement("div");
-    vazio.classList.add("dia-calendario", "disabled");
-    vazio.innerText = "";
-    grid.appendChild(vazio);
-  }
-
-  // Preenche cada dia do mês
-  for (let dia = 1; dia <= totalDias; dia++) {
-    const cel = document.createElement("div");
-    const hoje = new Date();
-    const dtCompare = new Date(anoAtual, mesAtual, dia);
-
-    if (dtCompare < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())) {
-      // dias passados
-      cel.classList.add("dia-calendario", "disabled");
-      cel.innerText = dia;
-    } else {
-      // dias disponíveis
-      cel.classList.add("dia-calendario", "available");
-      cel.innerText = dia;
-      cel.addEventListener("click", () => {
-        document.querySelectorAll(".dia-calendario.available").forEach((d) =>
-          d.classList.remove("selected")
-        );
-        cel.classList.add("selected");
-        const dd = String(dia).padStart(2, "0");
-        const mm = String(mesAtual + 1).padStart(2, "0");
-        estado.dataSelecionada = `${anoAtual}-${mm}-${dd}`;
-        // só habilita “Próximo” se já tiver escolhido um profissional
-        const habilitar = estado.profissionalSelecionado !== null;
-        atualizarFooter(habilitar);
-      });
-    }
-    grid.appendChild(cel);
-  }
-
-  document.getElementById("prevMes").onclick = () => {
-    if (mesAtual > 0) mesAtual--;
-    else {
-      mesAtual = 11;
-      anoAtual--;
-    }
-    montarCalendario();
-  };
-  document.getElementById("nextMes").onclick = () => {
-    if (mesAtual < 11) mesAtual++;
-    else {
-      mesAtual = 0;
-      anoAtual++;
-    }
-    montarCalendario();
-  };
+  return `${meses[mesAtualModal]} ${anoAtualModal}`;
 }
 
 // =================================================================================
-// 7) TELA 3: SELEÇÃO DE HORÁRIOS
+// 9) PASSO “step-profissional”: LISTAR PROFISSIONAIS QUE FAZEM O SERVIÇO
 // =================================================================================
-async function montarTelaHorarios() {
-  estado.etapa = 3;
-  estado.turnoSelecionado = null;
-  btnVoltar.classList.remove("hidden");
-  btnVoltar.onclick = () => montarTelaDataProfissional();
-  tituloHeader.innerText = "Escolha o horário";
+function carregarProfissionaisModal() {
+  console.log("→ carregarProfissionaisModal() para o serviço:", servicoSelecionado.id_servico);
+  console.log("   listaProfissionais completa:", listaProfissionais);
 
-  // Limpa o container e inicia a busca
-  appMain.innerHTML = `
-    <div class="lista-horarios" id="listaHorariosContainer"></div>
-  `;
+  listaProfissionaisModal.innerHTML = "";
+  const profsFiltrados = listaProfissionais.filter((p) =>
+    Array.isArray(p.servicos_disponiveis) &&
+    p.servicos_disponiveis.includes(servicoSelecionado.id_servico)
+  );
+  console.log("   profsFiltrados:", profsFiltrados);
 
-  try {
-    const dataSel = estado.dataSelecionada;
-    const idServ = estado.servicoSelecionado.id_servico;
-    const url = `${API_BASE}/getTurnos?data=${dataSel}&idServico=${idServ}`;
-    const resp = await fetch(url);
-
-    if (!resp.ok) throw new Error("Erro ao buscar turnos");
-    const todosTurnos = await resp.json();
-
-    // Filtra somente os turnos do profissional selecionado
-    listaTurnos = todosTurnos.filter(
-      (t) => t.id_profissional === estado.profissionalSelecionado.id_profissional
-    );
-    const container = document.getElementById("listaHorariosContainer");
-
-    if (listaTurnos.length === 0) {
-      // Se não houver horários, mostra mensagem + botão “Voltar”
-      container.innerHTML = `
-        <p style="text-align:center;color:var(--cor-textoSec);margin:16px 0;">
-          Sem horários disponíveis
-        </p>
-        <button id="btnVoltarHorario"
-          style="margin:0 auto;display:block;padding:8px 16px;
-                 border:1px solid var(--cor-texto);
-                 border-radius:20px;
-                 color:var(--cor-texto);
-                 background:none;">
-          Voltar
-        </button>
-      `;
-      document.getElementById("btnVoltarHorario").onclick = () => montarTelaDataProfissional();
-      atualizarFooter(false);
-      return;
-    }
-
-    // Caso haja horários, monta botões para cada um
-    container.innerHTML = listaTurnos
-      .map(
-        (t) => `
-      <button class="btn-horario available" data-id="${t.id_turno}">
-        ${t.hora}
-      </button>
-    `
-      )
-      .join("");
-
-    // Adiciona evento de clique em cada botão de horário
-    document.querySelectorAll(".btn-horario.available").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        document.querySelectorAll(".btn-horario").forEach((b) => b.classList.remove("selected"));
-        btn.classList.add("selected");
-        const idTurno = btn.dataset.id;
-        estado.turnoSelecionado = listaTurnos.find((x) => x.id_turno === idTurno);
-        atualizarFooter(true); // habilita próximo, pois já escolheu horário
-      });
-    });
-  } catch (err) {
-    console.error("Erro montarTelaHorários:", err);
-    appMain.innerHTML = `
-      <p style="text-align:center;color:var(--cor-error);margin-top:20px;">
-        Não foi possível carregar horários. Tente novamente.
+  if (profsFiltrados.length === 0) {
+    listaProfissionaisModal.innerHTML = `
+      <p style="text-align:center;color:var(--cor-textoSec);">
+        Nenhum profissional disponível para este serviço.
       </p>`;
-    atualizarFooter(false);
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
     return;
   }
 
-  // Ao renderizar a tela, sempre desabilita “Próximo” até o usuário escolher um horário
-  atualizarFooter(false);
-}
+  profsFiltrados.forEach((p) => {
+    const item = document.createElement("div");
+    item.classList.add("item-profissional");
+    item.dataset.id = p.id_profissional;
 
-// =================================================================================
-// 8) TELA 4: FORMULÁRIO DO CLIENTE
-// =================================================================================
-function montarTelaDadosCliente() {
-  estado.etapa = 4;
-  btnVoltar.classList.remove("hidden");
-  btnVoltar.onclick = () => montarTelaHorarios();
-  tituloHeader.innerText = "Seus Dados";
-
-  appMain.innerHTML = `
-    <div class="form-cliente-container">
-      <div class="form-cliente-group">
-        <input type="text" id="inputNome" />
-        <label for="inputNome">Nome completo</label>
-        <div class="erro-msg" id="erroNome">Nome obrigatório</div>
+    item.innerHTML = `
+      <img class="avatar" src="${
+        p.foto_url || "https://via.placeholder.com/48"
+      }" alt="${p.nome_profissional}" />
+      <div class="info-prof">
+        <h4>${p.nome_profissional}</h4>
+        <p>Especialista em …</p>
       </div>
-      <div class="form-cliente-group">
-        <input type="tel" id="inputTelefone" />
-        <label for="inputTelefone">WhatsApp (somente números)</label>
-        <div class="erro-msg" id="erroTelefone">Telefone inválido</div>
-      </div>
-    </div>
-  `;
+    `;
 
-  const inpNome = document.getElementById("inputNome");
-  const inpTel = document.getElementById("inputTelefone");
-  const errNome = document.getElementById("erroNome");
-  const errTel = document.getElementById("erroTelefone");
+    item.addEventListener("click", () => {
+      document
+        .querySelectorAll(".item-profissional")
+        .forEach((el) => el.classList.remove("selected"));
+      item.classList.add("selected");
+      profissionalSelecionado = p;
+      console.log("→ Profissional selecionado:", profissionalSelecionado);
 
-  inpNome.addEventListener("input", () => {
-    estado.nomeCliente = inpNome.value.trim();
-    if (estado.nomeCliente.length < 2) {
-      errNome.style.display = "block";
-      errNome.innerText = "Nome obrigatório";
-      atualizarFooter(false);
-    } else {
-      errNome.style.display = "none";
-      if (validarTelefone(inpTel.value)) atualizarFooter(true);
-    }
+      btnAvancarModal.classList.remove("disabled");
+      btnAvancarModal.disabled = false;
+    });
+
+    listaProfissionaisModal.appendChild(item);
   });
-
-  inpTel.addEventListener("input", () => {
-    estado.telefoneCliente = inpTel.value.replace(/\D/g, "");
-    if (!validarTelefone(inpTel.value)) {
-      errTel.style.display = "block";
-      errTel.innerText = "Telefone inválido";
-      atualizarFooter(false);
-    } else {
-      errTel.style.display = "none";
-      if (estado.nomeCliente.length >= 2) atualizarFooter(true);
-    }
-  });
-
-  // Garante que o botão “Confirmar” comece desabilitado
-  atualizarFooter(false);
-}
-
-function validarTelefone(tel) {
-  const apenasDigitos = tel.replace(/\D/g, "");
-  return apenasDigitos.length >= 10 && apenasDigitos.length <= 11;
 }
 
 // =================================================================================
-// 9) TELA 5: ENVIAR AGENDAMENTO E TOAST
+// 10) PASSO “step-horario”: BUSCAR TURNOS E FILTRAR POR PROFISSIONAL
 // =================================================================================
-async function enviarAgendamento() {
-  estado.etapa = 5;
-  btnAcaoFooter.disabled = true;
-  btnAcaoFooter.innerHTML = `
+async function carregarHorariosModal() {
+  listaHorariosModal.innerHTML = "";
+
+  console.log("→ carregarHorariosModal() · dataSelecionada =", dataSelecionada);
+  console.log("→ carregarHorariosModal() · id_profissional =", profissionalSelecionado ? profissionalSelecionado.id_profissional : null);
+
+  try {
+    const resp = await fetch(`${API_BASE}/getTurnos?data=${dataSelecionada}`);
+    if (!resp.ok) throw new Error("Erro ao buscar turnos");
+
+    const todosTurnos = await resp.json();
+    console.log("→ getTurnos retornou:", todosTurnos);
+
+    // Vamos comparar em minúsculo para evitar mismatch de caixa
+    listaTurnos = todosTurnos.filter(
+      (t) =>
+        t.id_profissional.toString().toLowerCase() ===
+        profissionalSelecionado.id_profissional.toString().toLowerCase()
+    );
+    console.log("→ listaTurnos filtrada:", listaTurnos);
+
+    if (listaTurnos.length === 0) {
+      listaHorariosModal.innerHTML = `
+        <p style="text-align:center;color:var(--cor-textoSec);">
+          Sem horários disponíveis.
+        </p>`;
+      btnAvancarModal.classList.add("disabled");
+      btnAvancarModal.disabled = true;
+      return;
+    }
+
+    // Se houver horários, cria botões clicáveis para cada um
+    listaTurnos.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.classList.add("btn-horario", "available");
+      btn.dataset.id = t.id_turno;
+      btn.innerText = t.hora;
+
+      btn.addEventListener("click", () => {
+        document
+          .querySelectorAll(".btn-horario")
+          .forEach((b) => b.classList.remove("selected"));
+        btn.classList.add("selected");
+        turnoSelecionado = t;
+        console.log("→ Horário selecionado:", turnoSelecionado);
+
+        btnAvancarModal.classList.remove("disabled");
+        btnAvancarModal.disabled = false;
+      });
+
+      listaHorariosModal.appendChild(btn);
+    });
+  } catch (err) {
+    console.error("Erro carregarHorariosModal:", err);
+    listaHorariosModal.innerHTML = `
+      <p style="text-align:center;color:var(--cor-error);">
+        Não foi possível carregar horários. Tente novamente.
+      </p>`;
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+  }
+}
+
+// =================================================================================
+// 11) BOTÕES “Próximo” e “Voltar” DENTRO DO MODAL
+// =================================================================================
+btnAvancarModal.addEventListener("click", () => {
+  // Se estiver em “step-data”
+  if (stepData.classList.contains("active")) {
+    console.log("→ Avançando de step-data para step-profissional");
+    mostrarEtapaModal("step-profissional");
+    carregarProfissionaisModal();
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+    return;
+  }
+
+  // Se estiver em “step-profissional”
+  if (stepProfissional.classList.contains("active")) {
+    console.log("→ Avançando de step-profissional para step-horario");
+    mostrarEtapaModal("step-horario");
+    carregarHorariosModal();
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+    return;
+  }
+
+  // Se estiver em “step-horario”
+  if (stepHorario.classList.contains("active")) {
+    console.log("→ Avançando de step-horario para step-dados");
+    mostrarEtapaModal("step-dados");
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+    return;
+  }
+
+  // Se estiver em “step-dados” → enviar agendamento
+  if (stepDados.classList.contains("active")) {
+    console.log("→ Enviando agendamento...");
+    enviarAgendamentoModal();
+    return;
+  }
+});
+
+btnVoltarModal.addEventListener("click", () => {
+  if (stepProfissional.classList.contains("active")) {
+    console.log("← Voltando de step-profissional para step-data");
+    mostrarEtapaModal("step-data");
+    return;
+  }
+  if (stepHorario.classList.contains("active")) {
+    console.log("← Voltando de step-horario para step-profissional");
+    mostrarEtapaModal("step-profissional");
+    return;
+  }
+  if (stepDados.classList.contains("active")) {
+    console.log("← Voltando de step-dados para step-horario");
+    mostrarEtapaModal("step-horario");
+    return;
+  }
+});
+
+// =================================================================================
+// 12) VALIDAÇÃO DOS CAMPOS “Nome” e “Telefone” (step-dados)
+// =================================================================================
+inputNomeModal.addEventListener("input", () => {
+  nomeCliente = inputNomeModal.value.trim();
+  validarCamposCliente();
+});
+inputTelefoneModal.addEventListener("input", () => {
+  telefoneCliente = inputTelefoneModal.value.replace(/\D/g, "");
+  validarCamposCliente();
+});
+function validarCamposCliente() {
+  let valido = true;
+
+  if (nomeCliente.length < 2) {
+    erroNomeModal.style.display = "block";
+    valido = false;
+  } else {
+    erroNomeModal.style.display = "none";
+  }
+
+  if (!/^\d{10,11}$/.test(telefoneCliente)) {
+    erroTelefoneModal.style.display = "block";
+    valido = false;
+  } else {
+    erroTelefoneModal.style.display = "none";
+  }
+
+  if (valido) {
+    btnAvancarModal.classList.remove("disabled");
+    btnAvancarModal.disabled = false;
+  } else {
+    btnAvancarModal.classList.add("disabled");
+    btnAvancarModal.disabled = true;
+  }
+}
+
+// =================================================================================
+// 13) ENVIAR AGENDAMENTO (step-dados)
+// =================================================================================
+async function enviarAgendamentoModal() {
+  btnAvancarModal.disabled = true;
+  btnAvancarModal.innerHTML = `
     <span class="spinner"
       style="border:3px solid var(--cor-accent);
              border-top:3px solid rgba(255,255,255,0.2);
@@ -435,10 +570,10 @@ async function enviarAgendamento() {
   `;
 
   const payload = {
-    id_turno: estado.turnoSelecionado.id_turno,
-    id_servico: estado.servicoSelecionado.id_servico,
-    nome_cliente: estado.nomeCliente,
-    telefone_cliente: estado.telefoneCliente
+    id_turno: turnoSelecionado.id_turno,
+    id_servico: servicoSelecionado.id_servico,
+    nome_cliente: nomeCliente,
+    telefone_cliente: telefoneCliente
   };
 
   try {
@@ -449,22 +584,24 @@ async function enviarAgendamento() {
     });
 
     if (!resp.ok) throw new Error("Falha no agendamento");
-
     const data = await resp.json();
-    if (!data.success) throw new Error(data.error || "Falha no agendamento");
+    if (!data.success) throw new Error(data.message || "Erro no agendamento");
 
     mostrarToastSucesso("Agendamento registrado! Redirecionando…");
     setTimeout(() => {
       window.location.href = data.link_whatsapp;
     }, 1000);
   } catch (err) {
-    console.error("Erro ao enviar agendamento:", err);
-    mostrarToastErro("Erro ao agendar. Tente novamente.");
-    btnAcaoFooter.disabled = false;
-    btnAcaoFooter.innerText = "Confirmar";
+    console.error("Erro enviarAgendamentoModal:", err);
+    alert("Erro ao agendar. Tente novamente.");
+    btnAvancarModal.disabled = false;
+    btnAvancarModal.innerText = "Confirmar";
   }
 }
 
+// =================================================================================
+// 14) TOAST DE SUCESSO (FIXO)
+// =================================================================================
 function mostrarToastSucesso(msg) {
   const toast = document.createElement("div");
   toast.classList.add("toast-sucesso");
@@ -474,62 +611,3 @@ function mostrarToastSucesso(msg) {
     toast.remove();
   }, 2000);
 }
-
-function mostrarToastErro(msg) {
-  alert(msg);
-}
-
-// =================================================================================
-// 10) FUNÇÃO RESPONSÁVEL PELO BOTÃO DO FOOTER
-// =================================================================================
-function atualizarFooter(habilitar) {
-  btnAcaoFooter.disabled = !habilitar;
-
-  switch (estado.etapa) {
-    case 1:
-      btnAcaoFooter.innerText = "Próximo";
-      btnAcaoFooter.onclick = montarTelaDataProfissional;
-      break;
-
-    case 2:
-      btnAcaoFooter.innerText = "Próximo";
-      // Só avança se data + profissional já estiverem definidos
-      if (habilitar) {
-        btnAcaoFooter.onclick = montarTelaHorarios;
-      } else {
-        btnAcaoFooter.onclick = null;
-      }
-      break;
-
-    case 3:
-      btnAcaoFooter.innerText = "Próximo";
-      // Só avança se um horário tiver sido selecionado
-      if (habilitar) {
-        btnAcaoFooter.onclick = montarTelaDadosCliente;
-      } else {
-        btnAcaoFooter.onclick = null;
-      }
-      break;
-
-    case 4:
-      btnAcaoFooter.innerText = "Confirmar";
-      // Só envia se nome + telefone forem válidos (habilitar===true)
-      if (habilitar) {
-        btnAcaoFooter.onclick = enviarAgendamento;
-      } else {
-        btnAcaoFooter.onclick = null;
-      }
-      break;
-
-    default:
-      btnAcaoFooter.innerText = "Próximo";
-      btnAcaoFooter.onclick = null;
-  }
-}
-
-/* Animação spinner (adicionar no CSS caso não esteja):
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-*/
